@@ -116,7 +116,7 @@ export default function ProductEditor({
   );
 
   return (
-    <main className="container">
+    <div className="container">
       <Link className="back" href="/admin">← Back to catalogue</Link>
       <div className="editor-head">
         <h2 className="pagetitle">{mode === "create" ? "New product" : (f.sc_product_name || f.product_name || "Unnamed product")}</h2>
@@ -255,6 +255,6 @@ export default function ProductEditor({
           </section>
         ) : null}
       </div>
-    </main>
+    </div>
   );
 }
