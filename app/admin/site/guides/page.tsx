@@ -1,20 +1,32 @@
-import SfPlaceholder from "../sf-placeholder";
+import { supabaseAdmin } from "@/lib/supabase";
+import KnowledgeHub from "./knowledge-hub";
+import type { GuideRow } from "./pillar-meta";
 
-export default function StorefrontGuidesPage() {
-  return (
-    <SfPlaceholder
-      title="Guides"
-      description={
-        <>
-          At launch this is the Knowledge Hub, kept deliberately lean: a focused
-          set of core guides covering the risks and the concepts behind
-          household preparedness. Knowledge comes before commerce — but most of
-          it is delivered contextually, inside the Jimmy conversation, with
-          these deeper guides linked where useful rather than forced on
-          visitors as a hurdle.
-        </>
-      }
-      feed="Guide content authored under SC 03 (Jimmy knowledge packs, human-signed) and the Knowledge Hub editorial plan."
-    />
-  );
+export const dynamic = "force-dynamic";
+
+// STOREFRONT PREVIEW — Guides / Knowledge Hub.
+// Server component: fetches the guide drafts once, hands them to the
+// client hub (pillar / category / search filtering happens client-side).
+export default async function StorefrontGuidesPage() {
+  let guides: GuideRow[] = [];
+  let notice: string | null = null;
+
+  const sb = supabaseAdmin();
+  if (!sb) {
+    notice =
+      "Guides are offline — Supabase is not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).";
+  } else {
+    const { data, error } = await sb
+      .from("guides")
+      .select("slug,title,pillar,category,featured,read_min,summary,status")
+      .order("featured", { ascending: false })
+      .order("created_at", { ascending: true });
+    if (error) {
+      notice = `Guides failed to load: ${error.message}`;
+    } else {
+      guides = (data || []) as GuideRow[];
+    }
+  }
+
+  return <KnowledgeHub guides={guides} notice={notice} />;
 }
