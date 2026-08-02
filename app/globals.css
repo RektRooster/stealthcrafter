@@ -123,7 +123,10 @@ input[type="password"], input[type="text"] {
   outline: none;
 }
 input:focus { border-color: var(--brass-dim); }
-button.primary {
+/* Scoped to the login card only — the bare `button.primary` selector was
+   leaking width:100% onto every Command Center .cc-btn.primary (giant SEND
+   buttons squeezing chat inputs). */
+.card button.primary {
   margin-top: 18px;
   width: 100%;
   background: var(--brass);
@@ -136,7 +139,7 @@ button.primary {
   letter-spacing: 0.04em;
   cursor: pointer;
 }
-button.primary:hover { background: #cbaa6a; }
+.card button.primary:hover { background: #cbaa6a; }
 .error { color: var(--bad); font-size: 13px; margin-top: 14px; }
 
 /* ---------- Admin ---------- */
