@@ -113,7 +113,7 @@ export default function JimmyConsole({ data }: { data: JimmyConsoleData }) {
             SC 03 authors him; SC 05 hosts him.
           </div>
         </div>
-        <Link href="/admin/jimmy/preview" className="cc-jcx-navlink">
+        <Link href="/admin/site/jimmy" className="cc-jcx-navlink">
           CUSTOMER PREVIEW →
         </Link>
       </div>

@@ -127,7 +127,52 @@ export function CcNav() {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* STOREFRONT PREVIEW tier — the future public site, built behind the  */
+/* gate. Brass on ink (brand canon palette) so it is instantly clear   */
+/* what is admin-only (cyan row above) vs what becomes the live store. */
+/* ------------------------------------------------------------------ */
+const SF_TABS = [
+  { href: "/admin/site/home", label: "Home" },
+  { href: "/admin/site/jimmy", label: "Jimmy" },
+  { href: "/admin/site/guides", label: "Guides" },
+  { href: "/admin/site/catalogue", label: "Catalogue" },
+  { href: "/admin/site/kit-builder", label: "Kit Builder" },
+  { href: "/admin/site/tested", label: "Tested Reports" },
+  { href: "/admin/site/dashboard", label: "My Dashboard" },
+];
+
+export function SfNav() {
+  const path = usePathname() || "/admin";
+  return (
+    <nav className="sf-nav" aria-label="Storefront preview pages">
+      <span
+        className="sf-navlabel"
+        title="Pages on this row are built behind the gate and will become the public site at launch."
+      >
+        STOREFRONT — PREVIEW · NOT PUBLIC
+        <span className="info" aria-hidden="true">
+          ⓘ
+        </span>
+      </span>
+      {SF_TABS.map((t) => (
+        <Link
+          key={t.href}
+          href={t.href}
+          className={`sf-tab${path.startsWith(t.href) ? " active" : ""}`}
+        >
+          {t.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 function sectionFor(path: string): string {
+  if (path.startsWith("/admin/site")) {
+    const seg = path.split("/")[3];
+    return seg ? `STOREFRONT / ${seg.replace(/-/g, " ").toUpperCase()}` : "STOREFRONT";
+  }
   if (path.startsWith("/admin/product/new")) return "NEW PRODUCT";
   if (path.startsWith("/admin/product/")) return "STOCK ITEM";
   if (path === "/admin" || path === "/admin/") return "PRODUCTS";

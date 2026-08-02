@@ -1,4 +1,4 @@
-import { CcClock, CcFooterTime, CcIcon, CcNav, CcSectionTitle } from "./cc-chrome";
+import { CcClock, CcFooterTime, CcIcon, CcNav, CcSectionTitle, SfNav } from "./cc-chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +34,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </header>
       <CcNav />
+      <SfNav />
       <div className="cc-body">{children}</div>
       <footer className="cc-footer">
         <span className="cc-sync">
