@@ -2442,3 +2442,140 @@ table.cc-comp-flagtable { min-width: 760px; }
 /* ---------- AI safety panel ---------- */
 .cc-comp-jimmylink { text-decoration: none; }
 .cc-comp-jimmylink:hover { color: var(--cc-cyan); }
+
+/* ============================================================
+   OVERVIEW module (cc-ov-*) — Command Center landing dashboard
+   ============================================================ */
+.cc-ov { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------- hero strip ---------- */
+.cc-ov-hero { display: flex; flex-direction: column; gap: 16px; padding: 18px 20px; }
+.cc-ov-herotitle { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cc-ov-herotitle h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: 0.2em; }
+.cc-ov-herotitle h1 .cy { color: var(--cc-cyan); }
+.cc-ov-herotitle .date { font-family: var(--cc-mono); font-size: 10.5px; letter-spacing: 0.18em; color: var(--cc-muted); }
+.cc-ov-headlines { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.cc-ov-tile {
+  background: linear-gradient(180deg, var(--cc-panel3), var(--cc-panel));
+  border: 1px solid var(--cc-line2);
+  border-radius: 8px;
+  padding: 14px 14px 12px;
+  text-align: center;
+}
+.cc-ov-tile .n { font-family: var(--cc-mono); font-size: 28px; font-weight: 700; line-height: 1.1; }
+.cc-ov-tile .n.cyan { color: var(--cc-cyan); }
+.cc-ov-tile .l { font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cc-muted); margin-top: 6px; }
+.cc-ov-tile .s { font-family: var(--cc-mono); font-size: 10.5px; letter-spacing: 0.06em; color: var(--cc-text); opacity: 0.75; margin-top: 4px; }
+.cc-ov-tile.red { border-color: rgba(255, 77, 94, 0.5); background: linear-gradient(180deg, rgba(255, 77, 94, 0.1), var(--cc-panel)); }
+.cc-ov-tile.red .n { color: var(--cc-red); }
+.cc-ov-tile.red .l { color: rgba(255, 77, 94, 0.8); }
+.cc-ov-tile.green .n { color: var(--cc-green); }
+
+/* ---------- module panel grid ---------- */
+.cc-ov-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 1240px) { .cc-ov-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 760px) { .cc-ov-grid { grid-template-columns: 1fr; } }
+
+.cc-ov-panel { display: flex; flex-direction: column; }
+.cc-ov-figs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  flex: 1;
+  align-content: start;
+}
+.cc-ov-fig {
+  background: var(--cc-bg-deep);
+  border: 1px solid var(--cc-line);
+  border-radius: 6px;
+  padding: 9px 10px 8px;
+  min-width: 0;
+}
+.cc-ov-fig .v {
+  display: block;
+  font-family: var(--cc-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--cc-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cc-ov-fig .k {
+  display: block;
+  font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--cc-muted);
+  margin-top: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cc-ov-fig.green .v { color: var(--cc-green); }
+.cc-ov-fig.amber .v { color: var(--cc-amber); }
+.cc-ov-fig.red .v { color: var(--cc-red); }
+.cc-ov-fig.cyan .v { color: var(--cc-cyan); }
+
+.cc-ov-statusline {
+  margin: 12px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--cc-muted);
+  letter-spacing: 0.02em;
+}
+.cc-ov-open {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 10px;
+  align-self: flex-start;
+  color: var(--cc-cyan);
+  text-decoration: none;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.16em;
+  border: 1px solid var(--cc-line2);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+.cc-ov-open:hover { border-color: var(--cc-cyan); background: rgba(53, 207, 255, 0.06); }
+
+/* ---------- storefront preview panel (brass tier) ---------- */
+.cc-ov-panel.sf {
+  border-color: rgba(185, 151, 91, 0.45);
+  background: linear-gradient(180deg, rgba(185, 151, 91, 0.07), var(--cc-panel));
+}
+.cc-ov-panel.sf .cc-panel-h { color: var(--brass); }
+.cc-ov-sfchips { display: flex; flex-wrap: wrap; gap: 6px; align-content: start; flex: 1; }
+.cc-ov-sfchip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 4px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  border: 1px solid rgba(185, 151, 91, 0.35);
+  color: var(--cc-muted);
+  background: rgba(185, 151, 91, 0.05);
+  white-space: nowrap;
+}
+.cc-ov-sfchip::before { content: "●"; font-size: 7px; opacity: 0.6; }
+.cc-ov-sfchip.live { color: var(--brass); border-color: rgba(185, 151, 91, 0.6); background: rgba(185, 151, 91, 0.12); }
+.cc-ov-open.sf { color: var(--brass); border-color: rgba(185, 151, 91, 0.45); }
+.cc-ov-open.sf:hover { border-color: var(--brass); background: rgba(185, 151, 91, 0.08); }
+
+/* ---------- priority actions strip ---------- */
+.cc-ov-actionlist { display: flex; flex-direction: column; }
+.cc-ov-action {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--cc-line);
+  text-decoration: none;
+  color: var(--cc-text);
+  font-size: 12.5px;
+}
+.cc-ov-action:last-child { border-bottom: 0; }
+.cc-ov-action .dot { font-size: 8px; }
+.cc-ov-action.red .dot { color: var(--cc-red); }
+.cc-ov-action.amber .dot { color: var(--cc-amber); }
+.cc-ov-action .tx { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-ov-action .go { color: var(--cc-muted); }
+.cc-ov-action:hover { background: rgba(53, 207, 255, 0.04); }
+.cc-ov-action:hover .go { color: var(--cc-cyan); }
+.cc-ov-noactions { margin: 0; font-size: 12px; color: var(--cc-green); letter-spacing: 0.04em; }
+
+/* ---------- footer line ---------- */
+.cc-ov-foot {
+  margin: 0;
+  text-align: center;
+  font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--cc-muted2);
+}
