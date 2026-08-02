@@ -88,6 +88,7 @@ export default function ProductsConsole({ products }: { products: any[] }) {
   const [pillar, setPillar] = useState("");
   const [category, setCategory] = useState("");
   const [stage, setStage] = useState("");
+  const [euSrc, setEuSrc] = useState("");
   const [status, setStatus] = useState("");
   const [conf, setConf] = useState("");
   const [sort, setSort] = useState("name");
@@ -103,6 +104,7 @@ export default function ProductsConsole({ products }: { products: any[] }) {
       if (pillar && p.pillar !== pillar) return false;
       if (category && p.category !== category) return false;
       if (stage && p.research_stage !== stage) return false;
+      if (euSrc && (p.eu_sourcing || "unsourced") !== euSrc) return false;
       if (status && p.product_status !== status) return false;
       if (conf && p.research_confidence !== conf) return false;
       if (needle) {
@@ -114,10 +116,12 @@ export default function ProductsConsole({ products }: { products: any[] }) {
     list = [...list].sort((a, b) => {
       if (sort === "price") return (sellPrice(b) ?? -1) - (sellPrice(a) ?? -1);
       if (sort === "margin") return (marginPct(b) ?? -999) - (marginPct(a) ?? -999);
+      if (sort === "newest")
+        return String(b.created_at || "").localeCompare(String(a.created_at || ""));
       return displayName(a).localeCompare(displayName(b));
     });
     return list;
-  }, [products, q, pillar, category, stage, status, conf, sort]);
+  }, [products, q, pillar, category, stage, euSrc, status, conf, sort]);
 
   const stats = useMemo(() => {
     const s = { total: filtered.length, finalised: 0, review: 0, hold: 0, supplier: 0, heroes: 0 };
@@ -190,13 +194,13 @@ export default function ProductsConsole({ products }: { products: any[] }) {
 
   function exportCsv() {
     const header = [
-      "sc_id", "name", "brand", "pillar", "category", "type", "research_stage", "product_status",
+      "sc_id", "name", "brand", "pillar", "category", "type", "research_stage", "eu_sourcing", "product_status",
       "confidence", "needs_review", "dangerous_goods", "hero", "supplier_count", "primary_supplier",
       "stock_status", "cost", "sell_price", "margin_pct",
     ];
     const rows = filtered.map((p) => [
       scId(p), displayName(p), p.brand, p.pillar, p.category, p.subcategory || p.product_type,
-      p.research_stage, p.product_status, p.research_confidence,
+      p.research_stage, p.eu_sourcing || "unsourced", p.product_status, p.research_confidence,
       p.needs_review ? "yes" : "no", p.dangerous_goods ? "yes" : "no", p.hero_product ? "yes" : "no",
       p.supplier_count || 0, p.primary_route?.supplier_name || "",
       p.primary_route?.stock_status || "", costPrice(p) ?? "", sellPrice(p) ?? "",
@@ -261,6 +265,12 @@ export default function ProductsConsole({ products }: { products: any[] }) {
             <option value="product_identified">Identified</option>
             <option value="supplier_route_approved">Route approved</option>
           </select>
+          <select value={euSrc} onChange={(e) => setEuSrc(e.target.value)} title="EU sourcing — supply axis (SC 11), separate from research stage">
+            <option value="">Any EU sourcing</option>
+            <option value="unsourced">Unsourced</option>
+            <option value="wholesaler_available">Wholesaler-available</option>
+            <option value="trade_confirmed">Trade-confirmed</option>
+          </select>
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">Any status</option>
             {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -273,6 +283,7 @@ export default function ProductsConsole({ products }: { products: any[] }) {
           </select>
           <select value={sort} onChange={(e) => setSort(e.target.value)}>
             <option value="name">Sort: name</option>
+            <option value="newest">Sort: newest</option>
             <option value="price">Sort: price</option>
             <option value="margin">Sort: margin</option>
           </select>
@@ -339,6 +350,8 @@ export default function ProductsConsole({ products }: { products: any[] }) {
                       <div className="cc-prodname">
                         {displayName(p)}
                         {p.hero_product ? <span className="cc-chip cyan plain" style={{ marginLeft: 8 }}>HERO</span> : null}
+                        {p.eu_sourcing === "wholesaler_available" ? <span className="cc-chip amber plain" style={{ marginLeft: 8 }} title="EU wholesaler carries it — no trade account yet">EU-SOURCED</span> : null}
+                        {p.eu_sourcing === "trade_confirmed" ? <span className="cc-chip green plain" style={{ marginLeft: 8 }} title="Trade account open / real landed cost">TRADE</span> : null}
                       </div>
                       {p.brand ? <div className="cc-prodsub">{p.brand}</div> : null}
                     </td>

@@ -19,7 +19,7 @@ export async function getCategoryList(): Promise<{ id: number; name: string }[]>
 }
 
 const LIST_FIELDS =
-  "id,sc_product_name,product_name,example_product,brand,pillar,category_id,subcategory,product_type,research_stage,research_confidence,needs_review,product_status,wholesale_price,landed_cost,retail_price_rrp,selling_price,currency,image_urls,hero_product,safety_critical,dangerous_goods,ce_certified,images_complete,sku";
+  "id,sc_product_name,product_name,example_product,brand,pillar,category_id,subcategory,product_type,research_stage,research_confidence,needs_review,product_status,wholesale_price,landed_cost,retail_price_rrp,selling_price,currency,image_urls,hero_product,safety_critical,dangerous_goods,ce_certified,images_complete,sku,eu_sourcing,created_at";
 
 // Full catalogue (every product), category name resolved. Paged to beat the
 // PostgREST 1000-row default cap so all ~1,099 rows come through.
