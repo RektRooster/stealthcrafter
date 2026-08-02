@@ -23,6 +23,7 @@ const STATUS_FILL: Record<string, string> = {
   compliance_hold: "rgba(255, 77, 94, 0.42)",
 };
 const DIM_FILL = "rgba(30, 52, 78, 0.55)"; // researching + zero suppliers
+const CONTEXT_FILL = "rgba(16, 28, 44, 0.55)"; // non-EU context (UK) — barely lighter than the sea
 
 function supplierFill(n: number): string {
   if (n <= 0) return DIM_FILL;
@@ -308,11 +309,26 @@ export default function MapConsole({ map, markets, stats }: Props) {
           <div className="cc-panel-h">
             <CcIcon name="map" />
             Europe Map
-            <span className="right">EUROPEAN UNION COUNTRIES ONLY</span>
+            <span className="right">EU-27 · UK SHOWN FOR CONTEXT</span>
           </div>
           <div className="cc-map-stage" ref={mapBox} onMouseMove={onMove} onMouseLeave={() => { setHovered(null); setTip(null); }}>
             <svg viewBox={`0 0 ${map.width} ${map.height}`} className="cc-map-svg" role="img" aria-label="EU-27 map">
               <g transform={`translate(${cx} ${cy}) scale(${zoom}) translate(${-cx} ${-cy})`}>
+                {/* Non-EU context layer (UK) — under the EU-27, non-interactive */}
+                {(map.contextPaths || []).map((c) => (
+                  <path key={`ctx-${c.iso2}`} d={c.d} className="cc-map-context" fill={CONTEXT_FILL} />
+                ))}
+                {(map.contextPaths || []).map((c) => (
+                  <text
+                    key={`ctxl-${c.iso2}`}
+                    x={c.labelX}
+                    y={c.labelY}
+                    className="cc-map-label ctx"
+                    fontSize={10 / Math.sqrt(zoom)}
+                  >
+                    {c.label}
+                  </text>
+                ))}
                 {map.countries.map((c) => (
                   <path
                     key={c.iso2}
@@ -490,6 +506,7 @@ export default function MapConsole({ map, markets, stats }: Props) {
           <div className="lg"><span className="sw" style={{ background: STATUS_FILL.compliance_hold }} /> Compliance Hold</div>
           <div className="lg"><span className="sw" style={{ background: STATUS_FILL.supplier_ready }} /> Supplier Ready</div>
           <div className="lg"><span className="sw" style={{ background: DIM_FILL }} /> No supplier presence yet</div>
+          <div className="lg"><span className="sw" style={{ background: CONTEXT_FILL }} /> Non-EU (context)</div>
         </div>
       </div>
     </main>

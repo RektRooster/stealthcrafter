@@ -641,9 +641,11 @@ table.cc-table tbody tr.sel td:first-child { box-shadow: inset 2px 0 0 var(--cc-
 .cc-detailgrid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; margin-top: 14px; }
 .cc-span12 { grid-column: span 12; }
 .cc-span8 { grid-column: span 8; }
+.cc-span7 { grid-column: span 7; }
 .cc-span6 { grid-column: span 6; }
+.cc-span5 { grid-column: span 5; }
 .cc-span4 { grid-column: span 4; }
-@media (max-width: 1000px) { .cc-span8, .cc-span6, .cc-span4 { grid-column: span 12; } }
+@media (max-width: 1000px) { .cc-span8, .cc-span7, .cc-span6, .cc-span5, .cc-span4 { grid-column: span 12; } }
 
 .cc-hero { display: grid; grid-template-columns: 240px minmax(0, 1fr) 260px; gap: 20px; }
 @media (max-width: 1000px) { .cc-hero { grid-template-columns: 1fr; } }
@@ -1001,6 +1003,19 @@ table.cc-table tbody tr.sel td:first-child { box-shadow: inset 2px 0 0 var(--cc-
   filter: drop-shadow(0 0 8px rgba(53, 207, 255, 0.35));
 }
 
+/* ---------- non-EU context layer (UK) ---------- */
+.cc-map-context {
+  stroke: rgba(53, 207, 255, 0.1);
+  stroke-width: 0.6;
+  pointer-events: none;
+  vector-effect: non-scaling-stroke;
+}
+.cc-map-label.ctx {
+  fill: rgba(113, 137, 166, 0.5);
+  letter-spacing: 0.3em;
+  stroke: none;
+}
+
 /* ---------- edit market form ---------- */
 .cc-map-edit .grid { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 14px; margin-bottom: 12px; }
 @media (max-width: 900px) { .cc-map-edit .grid { grid-template-columns: 1fr; } }
@@ -1015,3 +1030,102 @@ table.cc-table tbody tr.sel td:first-child { box-shadow: inset 2px 0 0 var(--cc-
 .cc-map-edit .savemsg { font-size: 11px; letter-spacing: 0.08em; }
 .cc-map-edit .savemsg.ok { color: var(--cc-green); }
 .cc-map-edit .savemsg.err { color: var(--cc-red); }
+
+/* =====================================================================
+   COMPETITORS module — War Room (cc-war-*)
+   ===================================================================== */
+.cc-war-stage {
+  position: relative;
+  border: 1px solid var(--cc-line);
+  border-radius: 8px;
+  background:
+    radial-gradient(ellipse at 72% 22%, rgba(53, 207, 255, 0.05), transparent 60%),
+    var(--cc-bg-deep);
+  overflow: hidden;
+}
+.cc-war-svg { width: 100%; height: auto; display: block; }
+.cc-war-grid { stroke: rgba(53, 207, 255, 0.07); stroke-width: 1; }
+.cc-war-frame { stroke: var(--cc-line2); stroke-width: 1; }
+.cc-war-band { fill: rgba(113, 137, 166, 0.6); font-size: 8px; letter-spacing: 0.14em; font-weight: 600; }
+.cc-war-tick { fill: rgba(113, 137, 166, 0.5); font-size: 7.5px; letter-spacing: 0.08em; text-anchor: middle; }
+.cc-war-axis { fill: var(--cc-muted); font-size: 8.5px; letter-spacing: 0.18em; text-anchor: middle; font-weight: 700; }
+.cc-war-target { color: var(--cc-cyan); }
+.cc-war-target circle { fill: rgba(53, 207, 255, 0.04); stroke: var(--cc-cyan); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.cc-war-target text { fill: var(--cc-cyan); text-anchor: middle; font-weight: 700; letter-spacing: 0.1em; }
+.cc-war-dot { cursor: pointer; }
+.cc-war-dot text { pointer-events: none; }
+.cc-war-dot.hov circle { filter: brightness(1.5); }
+.cc-war-dot.sel circle { filter: drop-shadow(0 0 6px rgba(53, 207, 255, 0.6)) brightness(1.4); }
+.cc-war-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 10.5px; color: var(--cc-muted); }
+.cc-war-legend .dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  display: inline-block; margin-right: 5px; vertical-align: -1px;
+}
+.cc-war-note { margin-top: 8px; font-size: 10px; color: var(--cc-muted2); letter-spacing: 0.03em; line-height: 1.5; }
+
+/* threat matrix */
+table.cc-war-table { min-width: 700px; }
+table.cc-war-table td { white-space: normal; }
+.cc-war-name { display: flex; flex-direction: column; gap: 1px; min-width: 170px; }
+.cc-war-name .nm { font-weight: 600; }
+.cc-war-name .dm {
+  font-family: var(--cc-mono); font-size: 10px; color: var(--cc-cyan);
+  text-decoration: none; letter-spacing: 0.04em; opacity: 0.85;
+}
+.cc-war-name .dm:hover { text-decoration: underline; opacity: 1; }
+.cc-war-style { font-size: 11px; color: var(--cc-muted); max-width: 170px; }
+.cc-war-eye {
+  background: none; border: 0; padding: 3px; cursor: pointer;
+  color: var(--cc-muted2); display: inline-flex; border-radius: 4px;
+}
+.cc-war-eye:hover { color: var(--cc-cyan); }
+.cc-war-eye.on { color: var(--cc-cyan); filter: drop-shadow(0 0 4px rgba(53, 207, 255, 0.6)); }
+.cc-war-sort {
+  background: var(--cc-bg-deep); color: var(--cc-cyan);
+  border: 1px solid var(--cc-line2); border-radius: 5px;
+  padding: 3px 6px; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  cursor: pointer; outline: none;
+}
+.cc-war-sort:focus { border-color: var(--cc-cyan); }
+
+/* selected competitor */
+.cc-war-domain {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--cc-mono); font-size: 12px; color: var(--cc-cyan);
+  text-decoration: none; letter-spacing: 0.04em;
+}
+.cc-war-domain:hover { text-decoration: underline; }
+.cc-war-statelink { color: var(--cc-cyan); text-decoration: none; }
+.cc-war-statelink:hover { text-decoration: underline; }
+
+/* chips: critical = filled red */
+.cc-chip.red.fill { background: rgba(255, 77, 94, 0.24); color: #ffd9dd; border-color: rgba(255, 77, 94, 0.7); }
+.cc-chip.tag { flex: 0 0 auto; min-width: 82px; justify-content: center; }
+
+/* mini rival map */
+.cc-war-minimap {
+  border: 1px solid var(--cc-line); border-radius: 8px;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(53, 207, 255, 0.05), transparent 65%),
+    var(--cc-bg-deep);
+  padding: 6px;
+}
+.cc-war-minimap svg { width: 100%; height: auto; display: block; }
+.cc-war-minimap path.mm {
+  stroke: rgba(53, 207, 255, 0.3); stroke-width: 0.7; cursor: pointer;
+  vector-effect: non-scaling-stroke;
+}
+.cc-war-minimap path.mm:hover { filter: brightness(1.45); }
+.cc-war-minimap path.mm.sel {
+  stroke: var(--cc-cyan); stroke-width: 1.4;
+  filter: drop-shadow(0 0 6px rgba(53, 207, 255, 0.55)) brightness(1.25);
+}
+
+/* headline reads */
+.cc-war-insights { display: flex; flex-direction: column; }
+.cc-war-insights .row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--cc-line);
+  font-size: 12.5px; line-height: 1.6; color: var(--cc-text);
+}
+.cc-war-insights .row:last-child { border-bottom: 0; }

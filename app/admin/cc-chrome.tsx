@@ -47,6 +47,14 @@ export function CcIcon({ name, size = 14 }: { name: string; size?: number }) {
           <path d="M16 15.3c2.9.2 4.9 1.6 5.5 4.7" />
         </svg>
       );
+    case "competitors":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="7" />
+          <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+          <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+        </svg>
+      );
     case "testing":
       return (
         <svg {...common}>
@@ -92,6 +100,7 @@ const TABS = [
   { href: "/admin/map", label: "Map", icon: "map" },
   { href: "/admin", label: "Products", icon: "products" },
   { href: "/admin/suppliers", label: "Suppliers", icon: "suppliers" },
+  { href: "/admin/competitors", label: "Competitors", icon: "competitors" },
   { href: "/admin/testing", label: "Testing", icon: "testing" },
   { href: "/admin/compliance", label: "Compliance", icon: "compliance" },
   { href: "/admin/jimmy", label: "Jimmy", icon: "jimmy" },

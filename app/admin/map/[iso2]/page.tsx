@@ -4,6 +4,7 @@ import { CcIcon } from "../../cc-chrome";
 import { flagEmoji } from "@/lib/flags";
 import { getCountryMini } from "@/lib/eu-map";
 import { getCountryDetail, getCountryMarket } from "@/lib/map-data";
+import { getCompetitorByCountry } from "@/lib/competitors-data";
 import CountryEditor from "./country-editor";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,12 @@ const STATUS_CHIP: Record<string, { label: string; tone: string }> = {
 
 const PRODUCT_CHIP_LIMIT = 36;
 
+const MATCH_CHIP: Record<string, { label: string; tone: string }> = {
+  direct: { label: "DIRECT RIVAL", tone: "red" },
+  partial: { label: "PARTIAL MATCH", tone: "amber" },
+  proxy: { label: "PROXY / WHITE SPACE", tone: "muted" },
+};
+
 export default async function CountryProfilePage({
   params,
 }: {
@@ -28,9 +35,14 @@ export default async function CountryProfilePage({
 
   let market = null;
   let detail = null;
+  let rival = null;
   let loadError: string | null = null;
   try {
-    [market, detail] = await Promise.all([getCountryMarket(iso2), getCountryDetail(iso2)]);
+    [market, detail, rival] = await Promise.all([
+      getCountryMarket(iso2),
+      getCountryDetail(iso2),
+      getCompetitorByCountry(iso2).catch(() => null), // rival panel is best-effort
+    ]);
   } catch (e: any) {
     loadError = e?.message || String(e);
   }
@@ -179,6 +191,51 @@ export default async function CountryProfilePage({
                 </span>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* ---------- closest rival ---------- */}
+        <div className="cc-panel cc-span6">
+          <div className="cc-panel-h">
+            <CcIcon name="competitors" />
+            Closest Rival
+            {rival?.match_strength ? (
+              <span className="right">{(MATCH_CHIP[rival.match_strength] || { label: rival.match_strength }).label}</span>
+            ) : null}
+          </div>
+          {rival ? (
+            <>
+              <div className="cc-prodname" style={{ fontSize: 15 }}>
+                {flagEmoji(iso2)} {rival.name}
+              </div>
+              {rival.domain || rival.website_url ? (
+                <a
+                  className="cc-war-domain"
+                  href={rival.website_url || `https://${rival.domain}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ marginTop: 4 }}
+                >
+                  {rival.domain || rival.website_url}
+                </a>
+              ) : null}
+              <div className="cc-chiprow" style={{ marginTop: 10, marginBottom: 10 }}>
+                {rival.match_strength ? (
+                  <span className={`cc-chip ${(MATCH_CHIP[rival.match_strength] || { tone: "muted" }).tone} plain`}>
+                    {(MATCH_CHIP[rival.match_strength] || { label: rival.match_strength }).label}
+                  </span>
+                ) : null}
+                {rival.style ? <span className="cc-chip muted plain">{rival.style.toUpperCase()}</span> : null}
+              </div>
+              {rival.positioning ? <div className="cc-noteblock">{rival.positioning}</div> : null}
+              <div style={{ marginTop: 12 }}>
+                <Link className="cc-btn" href="/admin/competitors">
+                  Open Competitor War Room
+                </Link>
+              </div>
+            </>
+          ) : (
+            <span className="cc-empty">No rival mapped for this state yet.</span>
           )}
         </div>
 

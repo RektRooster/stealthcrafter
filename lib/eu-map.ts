@@ -21,6 +21,12 @@ const EU27_BY_NUMERIC: Record<string, string> = {
 
 export const EU27_ISO2 = Object.values(EU27_BY_NUMERIC);
 
+// Non-EU countries rendered dimmed, purely for geographic context (the
+// founder's home market). Never counted in market stats or selectors.
+const CONTEXT_BY_NUMERIC: Record<string, { iso2: string; label: string }> = {
+  "826": { iso2: "GB", label: "UK" }, // United Kingdom incl. Northern Ireland
+};
+
 // Mainland-Europe frame. Rings whose first point falls outside this box are
 // overseas territories (Canary Islands, French Guiana, Azores, Réunion, …)
 // and are dropped so the projection stays on Europe — per the mockup.
@@ -57,10 +63,20 @@ export type EuCountryPath = {
   area: number; // projected px^2 — used to decide which countries get labels
 };
 
+// Context-only geometry (non-EU, non-interactive) drawn under the EU-27.
+export type ContextPath = {
+  iso2: string;
+  label: string;
+  d: string;
+  labelX: number;
+  labelY: number;
+};
+
 export type EuMapData = {
   width: number;
   height: number;
   countries: EuCountryPath[];
+  contextPaths: ContextPath[];
 };
 
 export const EU_MAP_WIDTH = 960;
@@ -75,6 +91,21 @@ function buildEuFeatures() {
     const clipped = clipGeometry(f.geometry);
     if (!clipped) continue;
     out.push({ iso2, name: (f.properties as any)?.name || iso2, geometry: clipped });
+  }
+  return out;
+}
+
+// Same clipping pipeline as the EU-27 — the mainland-Europe bbox already
+// covers Great Britain and Northern Ireland (both part of the GB geometry).
+function buildContextFeatures() {
+  const all = feature(world, world.objects.countries).features;
+  const out: { iso2: string; label: string; geometry: any }[] = [];
+  for (const f of all) {
+    const ctx = CONTEXT_BY_NUMERIC[String(f.id).padStart(3, "0")];
+    if (!ctx) continue;
+    const clipped = clipGeometry(f.geometry);
+    if (!clipped) continue;
+    out.push({ iso2: ctx.iso2, label: ctx.label, geometry: clipped });
   }
   return out;
 }
@@ -112,7 +143,20 @@ export function getEuMapData(): EuMapData {
       area: Math.round(path.area(geo as any)),
     };
   });
-  cached = { width: EU_MAP_WIDTH, height: EU_MAP_HEIGHT, countries };
+  // Context countries reuse the projection fitted to the EU-27 only, so the
+  // 27-country layout is identical with or without them.
+  const contextPaths: ContextPath[] = buildContextFeatures().map((f) => {
+    const geo = { type: "Feature" as const, properties: {}, geometry: f.geometry };
+    const [labelX, labelY] = path.centroid(geo as any);
+    return {
+      iso2: f.iso2,
+      label: f.label,
+      d: path(geo as any) || "",
+      labelX: Math.round(labelX * 10) / 10,
+      labelY: Math.round(labelY * 10) / 10,
+    };
+  });
+  cached = { width: EU_MAP_WIDTH, height: EU_MAP_HEIGHT, countries, contextPaths };
   return cached;
 }
 
