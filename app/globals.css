@@ -2056,8 +2056,10 @@ button.cc-lab-step:hover .sl { color: var(--cc-cyan); }
 
 /* ---------- second nav tier: brass on ink ---------- */
 .sf-nav {
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: center; /* centre tabs like the admin row above */
   gap: 2px;
   padding: 0 16px;
   background: var(--ink);
@@ -2067,10 +2069,14 @@ button.cc-lab-step:hover .sl { color: var(--cc-cyan); }
   scrollbar-width: thin;
 }
 .sf-navlabel {
+  position: absolute; /* pinned left so the tab group stays truly centred */
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin: 7px 14px 7px 0;
+  margin: 0;
   padding: 4px 10px;
   border: 1px solid var(--brass);
   border-radius: 4px;
@@ -2107,6 +2113,16 @@ button.cc-lab-step:hover .sl { color: var(--cc-cyan); }
   color: var(--brass);
   border-bottom-color: var(--brass);
   background: linear-gradient(180deg, transparent, rgba(185, 151, 91, 0.09));
+}
+/* Narrow screens: centring + pinned label would collide — revert to a
+   left-aligned scrollable row with the label back in flow. */
+@media (max-width: 1180px) {
+  .sf-nav { justify-content: flex-start; }
+  .sf-navlabel {
+    position: static;
+    transform: none;
+    margin: 7px 14px 7px 0;
+  }
 }
 
 /* ---------- storefront page canvas ---------- */
