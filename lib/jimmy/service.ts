@@ -114,17 +114,30 @@ type TriggerRow = {
   active: boolean;
 };
 
+// One alternative group: "(a/b/c)" or plain text. Matches if ANY alternative
+// is present as a whole-word phrase. Parsed BEFORE normalisation (normalising
+// first would strip the ()/+ syntax characters).
+function altGroupMatches(norm: string, rawGroup: string): boolean {
+  const inner = rawGroup.replace(/^\s*\(/, "").replace(/\)\s*$/, "");
+  for (const alt of inner.split("/")) {
+    const a = normaliseText(alt);
+    if (a && norm.includes(` ${a} `)) return true;
+  }
+  return false;
+}
+
 export function matchTrigger(message: string, triggers: TriggerRow[]): TriggerRow | null {
   const norm = ` ${normaliseText(message)} `;
   if (norm.trim().length === 0) return null;
   for (const t of triggers) {
     if (!t.active || !t.patterns) continue;
-    const patterns = t.patterns
-      .split("|")
-      .map((p) => normaliseText(p))
-      .filter(Boolean);
-    for (const p of patterns) {
-      if (norm.includes(` ${p} `)) return t;
+    for (const rawPattern of t.patterns.split("|").map((s) => s.trim()).filter(Boolean)) {
+      // Trigger List co-occurrence notation: "a + (b/c)" = ALL +-separated
+      // parts must match; each part may be an any-of group.
+      const parts = rawPattern.split("+").map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 0 && parts.every((part) => altGroupMatches(norm, part))) {
+        return t;
+      }
     }
   }
   return null;
