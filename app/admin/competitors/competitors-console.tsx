@@ -7,21 +7,16 @@ import { CcIcon } from "../cc-chrome";
 import { flagEmoji } from "@/lib/flags";
 import type { EuMapData } from "@/lib/eu-map";
 import type { CountryMarket } from "@/lib/map-data";
-import type { Competitor, MatchStrength, ThreatLevel } from "@/lib/competitors-data";
+import type { CompetitorWithMetrics, MatchStrength, ThreatLevel } from "@/lib/competitors-data";
 
-/* ---------- match / threat presentation ---------- */
+type Row = CompetitorWithMetrics;
+
+/* ---------- match presentation ---------- */
 
 const MATCH_META: Record<MatchStrength, { label: string; chip: string; color: string; fill: string }> = {
   direct: { label: "DIRECT", chip: "red", color: "#ff4d5e", fill: "rgba(255, 77, 94, 0.38)" },
   partial: { label: "PARTIAL", chip: "amber", color: "#ffb340", fill: "rgba(255, 179, 64, 0.34)" },
   proxy: { label: "PROXY", chip: "muted", color: "#7189a6", fill: "rgba(113, 137, 166, 0.22)" },
-};
-
-const THREAT_META: Record<ThreatLevel, { label: string; chip: string }> = {
-  low: { label: "LOW", chip: "green" },
-  medium: { label: "MEDIUM", chip: "amber" },
-  high: { label: "HIGH", chip: "red" },
-  critical: { label: "CRITICAL", chip: "red fill" },
 };
 
 function MatchChip({ m }: { m: MatchStrength | null }) {
@@ -30,10 +25,102 @@ function MatchChip({ m }: { m: MatchStrength | null }) {
   return <span className={`cc-chip ${meta.chip} plain`}>{meta.label}</span>;
 }
 
-function ThreatChip({ t }: { t: ThreatLevel | null }) {
-  if (!t) return <span className="cc-chip muted plain">NOT ASSESSED</span>;
-  const meta = THREAT_META[t];
-  return <span className={`cc-chip ${meta.chip}`}>{meta.label}</span>;
+/* ---------- effective threat (founder override > auto score) ---------- */
+
+type ThreatBand = "low" | "medium" | "high" | "critical";
+
+const BAND_META: Record<ThreatBand, { label: string; chip: string; color: string; fill: string }> = {
+  low: { label: "LOW", chip: "green", color: "#34d97b", fill: "rgba(52, 217, 123, 0.34)" },
+  medium: { label: "MEDIUM", chip: "amber", color: "#ffb340", fill: "rgba(255, 179, 64, 0.34)" },
+  high: { label: "HIGH", chip: "orange", color: "#ff8a3d", fill: "rgba(255, 138, 61, 0.38)" },
+  critical: { label: "CRITICAL", chip: "red fill", color: "#ff4d5e", fill: "rgba(255, 77, 94, 0.44)" },
+};
+
+function bandForScore(score: number): ThreatBand {
+  if (score >= 80) return "critical";
+  if (score >= 60) return "high";
+  if (score >= 40) return "medium";
+  return "low";
+}
+
+type EffectiveThreat =
+  | { kind: "founder"; level: ThreatLevel; band: ThreatBand; sortKey: number }
+  | { kind: "auto"; score: number; band: ThreatBand; sortKey: number }
+  | null;
+
+// Founder levels sort against auto scores at representative band midpoints,
+// nudged up so an override outranks an equal-band auto score.
+const LEVEL_SORT: Record<ThreatLevel, number> = { low: 20, medium: 50, high: 70, critical: 90 };
+
+function effectiveThreat(r: Row): EffectiveThreat {
+  if (r.threat_level) {
+    return { kind: "founder", level: r.threat_level, band: r.threat_level, sortKey: LEVEL_SORT[r.threat_level] + 0.5 };
+  }
+  if (r.threat_score != null) {
+    return { kind: "auto", score: r.threat_score, band: bandForScore(r.threat_score), sortKey: r.threat_score };
+  }
+  return null;
+}
+
+function threatLabel(t: EffectiveThreat): string {
+  if (!t) return "—";
+  return t.kind === "founder" ? BAND_META[t.band].label : `AUTO ${Math.round(t.score)}/100`;
+}
+
+function EffectiveThreatChip({ t }: { t: EffectiveThreat }) {
+  if (!t) return <span className="cc-chip muted plain">NOT SCORED</span>;
+  const meta = BAND_META[t.band];
+  if (t.kind === "founder") {
+    return (
+      <span className="cc-war-threatcell">
+        <span className={`cc-chip ${meta.chip}`}>{meta.label}</span>
+        <span className="cc-chip muted plain sm">FOUNDER</span>
+      </span>
+    );
+  }
+  return <span className={`cc-chip ${meta.chip}`}>AUTO {Math.round(t.score)}/100</span>;
+}
+
+/* ---------- formatting helpers ---------- */
+
+function fmtCompact(n: number | null | undefined): string {
+  if (n == null) return "—";
+  const trim = (v: number, suffix: string) => {
+    const r = Math.round(v * 10) / 10;
+    return `${(r % 1 === 0 ? r.toFixed(0) : r.toFixed(1))}${suffix}`;
+  };
+  if (n >= 1e6) return trim(n / 1e6, "M");
+  if (n >= 1000) return trim(n / 1000, "k");
+  return String(Math.round(n));
+}
+
+function fmtDr(dr: number | null | undefined): string {
+  if (dr == null) return "—";
+  const r = Math.round(dr * 10) / 10;
+  return r % 1 === 0 ? r.toFixed(0) : r.toFixed(1);
+}
+
+// paid_cost arrives in USD CENTS
+function fmtUsdCents(cents: number | null | undefined): string {
+  if (cents == null) return "—";
+  const usd = cents / 100;
+  if (usd >= 1000) return `$${fmtCompact(usd)}`;
+  return `$${usd % 1 === 0 ? usd.toFixed(0) : usd.toFixed(2)}`;
+}
+
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T"));
+  return Number.isNaN(d.getTime()) ? "—" : d.toISOString().slice(0, 10);
+}
+
+function countryName(iso2: string): string {
+  try {
+    const dn = new Intl.DisplayNames(["en"], { type: "region" });
+    return dn.of(iso2.toUpperCase()) || iso2.toUpperCase();
+  } catch {
+    return iso2.toUpperCase();
+  }
 }
 
 /* ---------- product-space proximity proxy (X axis) ----------
@@ -55,9 +142,6 @@ function styleDepth(style: string | null): number {
 }
 
 const DEPTH_TICKS = ["OUTDOOR", "TACTICAL", "SURVIVAL", "PREPPER / 72H", "KIT (HOUSEHOLD)", "CURATED"];
-
-// Match strength → vertical band (fraction of plot height, from the bottom).
-const MATCH_BAND: Record<MatchStrength, number> = { proxy: 0.16, partial: 0.5, direct: 0.82 };
 
 /* ---------- small icons ---------- */
 
@@ -110,6 +194,12 @@ function WIcon({ name, size = 13 }: { name: string; size?: number }) {
           <circle cx="5.5" cy="18.5" r="1.5" fill="currentColor" stroke="none" />
         </svg>
       );
+    case "pulse":
+      return (
+        <svg {...common}>
+          <path d="M3 12h4l2.5-6 4 12L16 12h5" />
+        </svg>
+      );
     case "link":
       return (
         <svg {...common}>
@@ -138,18 +228,20 @@ function Eye({ on, onClick }: { on: boolean; onClick: (e: React.MouseEvent) => v
 
 /* ---------- component ---------- */
 
-type Props = { map: EuMapData; competitors: Competitor[]; markets: CountryMarket[] };
+type SortKey = "threat" | "dr" | "traffic" | "state" | "match" | "name";
+
+type Props = { map: EuMapData; competitors: Row[]; markets: CountryMarket[] };
 
 export default function CompetitorsConsole({ map, competitors, markets }: Props) {
   const router = useRouter();
-  const [rows, setRows] = useState<Competitor[]>(competitors);
+  const [rows, setRows] = useState<Row[]>(competitors);
   const [selected, setSelected] = useState<string>(() => {
     const twin = competitors.find((c) => c.country_iso2 === "EE");
     return twin?.id || competitors[0]?.id || "";
   });
   const [hovered, setHovered] = useState<string | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
-  const [sortBy, setSortBy] = useState<"state" | "match" | "name">("state");
+  const [sortBy, setSortBy] = useState<SortKey>("threat");
   const stageRef = useRef<HTMLDivElement>(null);
 
   const marketByIso = useMemo(() => Object.fromEntries(markets.map((m) => [m.iso2, m])), [markets]);
@@ -183,22 +275,47 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
     const partial = rows.filter((r) => r.match_strength === "partial").length;
     const proxies = rows.filter((r) => r.match_strength === "proxy");
     const watch = rows.filter((r) => r.watch).length;
-    const assessed = rows.filter((r) => r.threat_level !== null).length;
+    const scored = rows.filter((r) => r.threat_score != null).length;
+    const advertising = rows.filter((r) => (r.metrics?.paid_keywords ?? 0) > 0).length;
+    const totalTraffic = rows.reduce((acc, r) => acc + (r.metrics?.org_traffic ?? 0), 0);
+    let top: Row | null = null;
+    let topKey = -1;
+    for (const r of rows) {
+      const t = effectiveThreat(r);
+      if (t && t.sortKey > topKey) {
+        topKey = t.sortKey;
+        top = r;
+      }
+    }
+    let lastPulled: string | null = null;
+    for (const r of rows) {
+      const p = r.metrics?.pulled_at || null;
+      if (p && (!lastPulled || p > lastPulled)) lastPulled = p;
+    }
     return {
       direct,
       partial,
       proxy: proxies.length,
       proxyStates: proxies.map((r) => stateName(r.country_iso2)).join(", "),
       watch,
-      assessed,
+      scored,
+      advertising,
+      totalTraffic,
+      top,
+      lastPulled,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, marketByIso]);
+
+  const topThreat = stats.top ? effectiveThreat(stats.top) : null;
 
   /* ---- table sort ---- */
   const sorted = useMemo(() => {
     const arr = [...rows];
     const MATCH_ORD: Record<string, number> = { direct: 0, partial: 1, proxy: 2 };
+    const threatKey = (r: Row) => effectiveThreat(r)?.sortKey ?? -1;
+    const drKey = (r: Row) => r.metrics?.domain_rating ?? -1;
+    const trafficKey = (r: Row) => r.metrics?.org_traffic ?? -1;
     if (sortBy === "name") arr.sort((a, b) => a.name.localeCompare(b.name));
     else if (sortBy === "match")
       arr.sort(
@@ -206,42 +323,63 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
           (MATCH_ORD[a.match_strength || ""] ?? 3) - (MATCH_ORD[b.match_strength || ""] ?? 3) ||
           stateName(a.country_iso2).localeCompare(stateName(b.country_iso2))
       );
-    else arr.sort((a, b) => stateName(a.country_iso2).localeCompare(stateName(b.country_iso2)));
+    else if (sortBy === "state") arr.sort((a, b) => stateName(a.country_iso2).localeCompare(stateName(b.country_iso2)));
+    else if (sortBy === "dr") arr.sort((a, b) => drKey(b) - drKey(a) || trafficKey(b) - trafficKey(a));
+    else if (sortBy === "traffic") arr.sort((a, b) => trafficKey(b) - trafficKey(a) || drKey(b) - drKey(a));
+    else arr.sort((a, b) => threatKey(b) - threatKey(a) || drKey(b) - drKey(a) || a.name.localeCompare(b.name));
     return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, sortBy, marketByIso]);
 
-  /* ---- positioning map geometry ---- */
+  /* ---- positioning map geometry ----
+     X: style-derived product-space proximity (ordinal, unchanged).
+     Y: Ahrefs domain rating, linear 0-40 (current rival range is DR 0-35).
+     Bubble AREA ∝ organic traffic/mo, with a floor so 0-traffic rivals stay visible. */
   const PLOT = { x0: 56, x1: 644, y0: 22, y1: 372, w: 660, h: 428 };
+  const DR_MAX = 40;
   const xFor = (depth: number) => PLOT.x0 + ((depth - 0.5) / 6.4) * (PLOT.x1 - PLOT.x0);
-  const yFor = (f: number) => PLOT.y1 - f * (PLOT.y1 - PLOT.y0);
+  const yForDr = (dr: number) => PLOT.y1 - (Math.min(Math.max(dr, 0), DR_MAX) / DR_MAX) * (PLOT.y1 - PLOT.y0);
+
+  const MIN_R = 5.5;
+  const MAX_R = 23;
 
   const dots = useMemo(() => {
-    // Group dots that share a cell, then spread them on a deterministic spiral
-    // so nothing overlaps — layout jitter only, the underlying scale is ordinal.
-    const groups: Record<string, Competitor[]> = {};
+    const maxTraffic = Math.max(1, ...rows.map((r) => r.metrics?.org_traffic ?? 0));
+    const radiusFor = (r: Row) => {
+      const t = r.metrics?.org_traffic ?? 0;
+      return MIN_R + (MAX_R - MIN_R) * Math.sqrt(t / maxTraffic); // area ∝ traffic
+    };
+    // Rivals with no pull yet sit on the DR-0 baseline at minimum size.
+    // Group dots that share a cell (same depth + rounded DR), then spread on a
+    // deterministic spiral so the low-DR cluster stays readable — layout jitter only.
+    const groups: Record<string, Row[]> = {};
     for (const r of rows) {
-      const key = `${styleDepth(r.style)}:${r.match_strength || "proxy"}`;
+      const dr = r.metrics?.domain_rating ?? 0;
+      const key = `${styleDepth(r.style)}:${Math.round(dr)}`;
       (groups[key] ||= []).push(r);
     }
-    const out: { r: Competitor; x: number; y: number; depth: number }[] = [];
+    const out: { r: Row; x: number; y: number; rad: number }[] = [];
     for (const [key, members] of Object.entries(groups)) {
-      const [dStr, match] = key.split(":");
-      const depth = Number(dStr);
-      const baseX = xFor(depth);
-      const baseY = yFor(MATCH_BAND[(match as MatchStrength) || "proxy"] ?? 0.16);
+      const [dStr, drStr] = key.split(":");
+      const baseX = xFor(Number(dStr));
+      const baseY = yForDr(Number(drStr));
       members.sort((a, b) => (a.country_iso2 || "").localeCompare(b.country_iso2 || ""));
       members.forEach((m, i) => {
-        const rad = i === 0 ? 0 : 9 + 8.5 * Math.sqrt(i);
+        const spread = i === 0 ? 0 : 11 + 9 * Math.sqrt(i);
         const ang = i * 2.39996; // golden angle
-        out.push({ r: m, x: baseX + Math.cos(ang) * rad, y: baseY + Math.sin(ang) * rad * 0.85, depth });
+        out.push({
+          r: m,
+          x: baseX + Math.cos(ang) * spread,
+          y: baseY + Math.sin(ang) * spread * 0.8,
+          rad: radiusFor(m),
+        });
       });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
 
-  const scTarget = { x: xFor(6.18), y: yFor(0.94) };
+  const scTarget = { x: xFor(6.18), y: yForDr(30) };
 
   /* ---- persistence ---- */
   async function persist(id: string, patch: Record<string, any>): Promise<boolean> {
@@ -257,7 +395,7 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
     }
   }
 
-  async function toggleWatch(row: Competitor) {
+  async function toggleWatch(row: Row) {
     const next = !row.watch;
     setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, watch: next } : r)));
     if (row.id === selected) setWatchDraft(next);
@@ -279,7 +417,7 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
     };
     const ok = await persist(sel.id, patch);
     if (ok) {
-      setRows((rs) => rs.map((r) => (r.id === sel.id ? { ...r, ...patch } : r)) as Competitor[]);
+      setRows((rs) => rs.map((r) => (r.id === sel.id ? { ...r, ...patch } : r)) as Row[]);
       setMsg({ ok: true, text: "Assessment saved." });
       router.refresh();
     } else {
@@ -296,6 +434,15 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
 
   const hov = hovered ? byId[hovered] : null;
   const selUrl = sel ? sel.website_url || (sel.domain ? `https://${sel.domain}` : null) : null;
+  const selMetrics = sel?.metrics || null;
+  const selThreat = sel ? effectiveThreat(sel) : null;
+  const selWeights =
+    sel?.threat_score_inputs && typeof sel.threat_score_inputs.weights === "string"
+      ? sel.threat_score_inputs.weights
+      : null;
+  const selAhrefsUrl = sel?.domain
+    ? `https://app.ahrefs.com/site-explorer/overview/v2/subdomains/live?target=${encodeURIComponent(sel.domain)}`
+    : null;
 
   return (
     <main className="cc-container">
@@ -308,6 +455,18 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
           <h1>COMPETITOR WAR ROOM</h1>
           <div className="sub">Know them. Outperform them. · One closest rival per EU-27 state — founder research v1.0</div>
         </div>
+      </div>
+
+      {/* ---------- data feed strip ---------- */}
+      <div className="cc-war-datastrip">
+        <span className="live" />
+        <span className="k">AHREFS FEED</span>
+        <span className="sep">·</span>
+        <span>LAST PULLED {fmtDate(stats.lastPulled)}</span>
+        <span className="sep">·</span>
+        <span>REFRESH CADENCE: WEEKLY (SCHEDULED)</span>
+        <span className="sep">·</span>
+        <span>REFRESHED BY SC 05 SESSION</span>
       </div>
 
       {/* ---------- stat tiles ---------- */}
@@ -335,10 +494,34 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
         </div>
         <div className="cc-stat green">
           <div className="n">
-            {stats.assessed} / {rows.length}
+            {stats.scored} / {rows.length}
           </div>
-          <div className="l">Threat Assessed</div>
+          <div className="l">Auto-Scored</div>
         </div>
+        <div className="cc-stat red">
+          <div className="n">{topThreat ? (topThreat.kind === "auto" ? `${Math.round(topThreat.score)}` : BAND_META[topThreat.band].label) : "—"}</div>
+          <div className="l">Top Threat</div>
+          {stats.top ? <div className="l" style={{ opacity: 0.7, marginTop: 2 }}>{stats.top.name}</div> : null}
+        </div>
+        <div className="cc-stat cyan">
+          <div className="n">{fmtCompact(stats.totalTraffic)}</div>
+          <div className="l">Total Rival Traffic/Mo</div>
+        </div>
+        <div className="cc-stat amber">
+          <div className="n">{stats.advertising}</div>
+          <div className="l">Advertising (PPC Active)</div>
+        </div>
+      </div>
+
+      {/* ---------- SEO read (SC 02) ---------- */}
+      <div className="cc-war-seostrip">
+        <span className="cc-chip cyan plain tag">SEO READ</span>
+        <span>
+          Only fluchtrucksack.de and military1st.ie are meaningful SEO forces; the strongest curated player is
+          allprepare.com (NL). Every curated-household rival in our launch markets is weak (prepersi.eu DR 2.1) — the
+          curated space is open.
+        </span>
+        <span className="src">SC 02</span>
       </div>
 
       <div className="cc-detailgrid" style={{ marginTop: 4 }}>
@@ -347,7 +530,7 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
           <div className="cc-panel-h">
             <WIcon name="scatter" />
             Competitor Positioning Map
-            <span className="right">CLICK A DOT TO SELECT</span>
+            <span className="right">CLICK A BUBBLE TO SELECT</span>
           </div>
           <div className="cc-war-stage" ref={stageRef} onMouseMove={onStageMove} onMouseLeave={() => { setHovered(null); setTip(null); }}>
             <svg viewBox={`0 0 ${PLOT.w} ${PLOT.h}`} className="cc-war-svg" role="img" aria-label="Competitor positioning map">
@@ -355,16 +538,26 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
               {[1, 2, 3, 4, 5, 6].map((d) => (
                 <line key={`gx-${d}`} x1={xFor(d)} y1={PLOT.y0} x2={xFor(d)} y2={PLOT.y1} className="cc-war-grid" />
               ))}
-              {(["proxy", "partial", "direct"] as MatchStrength[]).map((m) => (
-                <line key={`gy-${m}`} x1={PLOT.x0} y1={yFor(MATCH_BAND[m])} x2={PLOT.x1} y2={yFor(MATCH_BAND[m])} className="cc-war-grid" />
+              {[0, 10, 20, 30, 40].map((dr) => (
+                <g key={`gy-${dr}`}>
+                  <line x1={PLOT.x0} y1={yForDr(dr)} x2={PLOT.x1} y2={yForDr(dr)} className="cc-war-grid" />
+                  <text x={PLOT.x0 - 8} y={yForDr(dr) + 3} className="cc-war-band" textAnchor="end">
+                    {dr}
+                  </text>
+                </g>
               ))}
               {/* axes frame */}
               <line x1={PLOT.x0} y1={PLOT.y0} x2={PLOT.x0} y2={PLOT.y1} className="cc-war-frame" />
               <line x1={PLOT.x0} y1={PLOT.y1} x2={PLOT.x1} y2={PLOT.y1} className="cc-war-frame" />
-              {/* Y band labels */}
-              <text x={8} y={yFor(MATCH_BAND.direct) + 3} className="cc-war-band">DIRECT</text>
-              <text x={8} y={yFor(MATCH_BAND.partial) + 3} className="cc-war-band">PARTIAL</text>
-              <text x={8} y={yFor(MATCH_BAND.proxy) + 3} className="cc-war-band">PROXY</text>
+              {/* Y axis label */}
+              <text
+                className="cc-war-axis"
+                transform={`rotate(-90 14 ${(PLOT.y0 + PLOT.y1) / 2})`}
+                x={14}
+                y={(PLOT.y0 + PLOT.y1) / 2}
+              >
+                DOMAIN RATING (AHREFS)
+              </text>
               {/* X ticks */}
               {DEPTH_TICKS.map((t, i) => (
                 <text key={t} x={xFor(i + 1)} y={PLOT.y1 + 16} className="cc-war-tick">
@@ -381,9 +574,11 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
                 <text x={scTarget.x} y={scTarget.y + 42} fontSize={8.5}>STEALTHCRAFTER</text>
                 <text x={scTarget.x} y={scTarget.y + 53} fontSize={7.5} opacity={0.75}>(TARGET POSITION)</text>
               </g>
-              {/* dots */}
-              {dots.map(({ r, x, y }) => {
-                const meta = MATCH_META[r.match_strength || "proxy"];
+              {/* bubbles — colour: effective threat band, area ∝ organic traffic */}
+              {dots.map(({ r, x, y, rad }) => {
+                const t = effectiveThreat(r);
+                const color = t ? BAND_META[t.band].color : "#7189a6";
+                const fill = t ? BAND_META[t.band].fill : "rgba(113, 137, 166, 0.18)";
                 const isSel = r.id === selected;
                 const isHov = r.id === hovered;
                 return (
@@ -393,8 +588,8 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
                     onMouseEnter={() => setHovered(r.id)}
                     onClick={() => setSelected(r.id)}
                   >
-                    <circle cx={x} cy={y} r={10} fill="rgba(6, 13, 23, 0.85)" stroke={meta.color} strokeWidth={isSel ? 2 : 1.2} />
-                    <text x={x} y={y + 3.5} fontSize={10} textAnchor="middle">
+                    <circle cx={x} cy={y} r={rad} fill={fill} stroke={color} strokeWidth={isSel ? 2 : 1.2} />
+                    <text x={x} y={y + 3.2} fontSize={rad >= 8 ? 10 : 8} textAnchor="middle">
                       {flagEmoji(r.country_iso2 || "")}
                     </text>
                   </g>
@@ -407,20 +602,25 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
                   {flagEmoji(hov.country_iso2 || "")} {hov.name}
                 </div>
                 <div className="tr">
-                  <MatchChip m={hov.match_strength} />
+                  <EffectiveThreatChip t={effectiveThreat(hov)} />
                 </div>
-                <div className="tm">{(hov.style || "").toUpperCase() || "—"}</div>
+                <div className="tm">
+                  DR {fmtDr(hov.metrics?.domain_rating)} · TRAFFIC {fmtCompact(hov.metrics?.org_traffic)}/MO
+                </div>
               </div>
             ) : null}
           </div>
           <div className="cc-war-legend">
-            <span><span className="dot" style={{ background: MATCH_META.direct.color }} /> Direct</span>
-            <span><span className="dot" style={{ background: MATCH_META.partial.color }} /> Partial</span>
-            <span><span className="dot" style={{ background: MATCH_META.proxy.color }} /> Proxy</span>
+            <span><span className="dot" style={{ background: BAND_META.low.color }} /> Low</span>
+            <span><span className="dot" style={{ background: BAND_META.medium.color }} /> Medium</span>
+            <span><span className="dot" style={{ background: BAND_META.high.color }} /> High</span>
+            <span><span className="dot" style={{ background: BAND_META.critical.color }} /> Critical</span>
+            <span><span className="dot" style={{ background: "#7189a6" }} /> Not scored</span>
           </div>
           <div className="cc-war-note">
             X axis is an ordinal proxy derived from each rival&apos;s style classification — not a measured metric.
-            Y axis: match strength. Dot spread within a cell is layout jitter only.
+            Y axis: Ahrefs domain rating (live pull). Bubble size = organic traffic/mo; colour = effective threat band.
+            Spread within a cell is layout jitter only.
           </div>
         </div>
 
@@ -439,7 +639,7 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
               ) : null}
               <div className="cc-chiprow" style={{ marginTop: 10 }}>
                 <MatchChip m={sel.match_strength} />
-                <ThreatChip t={sel.threat_level} />
+                <EffectiveThreatChip t={selThreat} />
                 {sel.watch ? <span className="cc-chip cyan plain">ON WATCH</span> : null}
               </div>
               <div className="cc-map-rows">
@@ -472,6 +672,87 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
                   </span>
                 </div>
               </div>
+
+              {/* ---- live signals (Ahrefs) ---- */}
+              <div className="cc-panel-h" style={{ marginTop: 16 }}>
+                <WIcon name="pulse" />
+                Live Signals
+                <span className="right">
+                  {selMetrics ? `AHREFS · PULLED ${fmtDate(selMetrics.pulled_at)}` : "NO PULL YET"}
+                </span>
+              </div>
+              {selMetrics ? (
+                <>
+                  <div className="cc-war-signals">
+                    <div className="sig">
+                      <span className="k">DOMAIN RATING</span>
+                      <span className="v">{fmtDr(selMetrics.domain_rating)}</span>
+                    </div>
+                    <div className="sig">
+                      <span className="k">ORGANIC TRAFFIC / MO</span>
+                      <span className="v">{fmtCompact(selMetrics.org_traffic)}</span>
+                    </div>
+                    <div className="sig">
+                      <span className="k">ORGANIC KEYWORDS</span>
+                      <span className="v">{fmtCompact(selMetrics.org_keywords)}</span>
+                    </div>
+                    <div className="sig">
+                      <span className="k">TOP MARKET</span>
+                      <span className="v">
+                        {selMetrics.top_country
+                          ? `${flagEmoji(selMetrics.top_country)} ${countryName(selMetrics.top_country)}`
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="sig">
+                      <span className="k">PAID KEYWORDS · SPEND</span>
+                      <span className="v">
+                        {(selMetrics.paid_keywords ?? 0) > 0
+                          ? `${selMetrics.paid_keywords} · ${fmtUsdCents(selMetrics.paid_cost)}/mo`
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="sig">
+                      <span className="k">REFERRING DOMAINS</span>
+                      <span className="v">{fmtCompact(selMetrics.refdomains)}</span>
+                    </div>
+                  </div>
+                  <div className="cc-war-trendhint">TREND — needs ≥2 pulls · second weekly snapshot unlocks deltas</div>
+                </>
+              ) : (
+                <div className="cc-notestrip">NO AHREFS PULL FOR THIS RIVAL YET</div>
+              )}
+
+              {/* ---- auto threat score ---- */}
+              <div className="cc-war-autoscore">
+                <span className="k">AUTO THREAT SCORE</span>
+                {sel.threat_score != null ? (
+                  <span className={`cc-chip ${BAND_META[bandForScore(sel.threat_score)].chip}`}>
+                    AUTO {Math.round(sel.threat_score)}/100
+                  </span>
+                ) : (
+                  <span className="cc-chip muted plain">NOT SCORED</span>
+                )}
+                {sel.threat_level ? (
+                  <span className="cc-chip muted plain sm">OVERRIDDEN BY FOUNDER</span>
+                ) : null}
+              </div>
+              {selWeights ? <div className="cc-war-formula">FORMULA · {selWeights}</div> : null}
+
+              {/* ---- deep links ---- */}
+              <div className="cc-war-links">
+                {selUrl ? (
+                  <a className="cc-btn" href={selUrl} target="_blank" rel="noopener noreferrer">
+                    OPEN SITE ↗
+                  </a>
+                ) : null}
+                {selAhrefsUrl ? (
+                  <a className="cc-btn" href={selAhrefsUrl} target="_blank" rel="noopener noreferrer">
+                    AHREFS ↗
+                  </a>
+                ) : null}
+              </div>
+
               {sel.positioning ? (
                 <>
                   <div className="cc-notelabel" style={{ marginTop: 12 }}>POSITIONING</div>
@@ -489,14 +770,14 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
               <div className="cc-panel-h" style={{ marginTop: 18 }}>
                 <CcIcon name="settings" />
                 Edit Assessment
-                <span className="right">FOUNDER SETS THREAT</span>
+                <span className="right">OVERRIDE BEATS AUTO</span>
               </div>
               <div className="cc-map-edit">
                 <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
                   <label>
-                    <span>Threat level</span>
+                    <span>Founder override (takes precedence)</span>
                     <select className="cc-input" value={threatDraft} onChange={(e) => setThreatDraft(e.target.value)}>
-                      <option value="">Not assessed</option>
+                      <option value="">No override — use auto score</option>
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
                       <option value="high">High</option>
@@ -541,9 +822,12 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
               <select
                 className="cc-war-sort"
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => setSortBy(e.target.value as SortKey)}
                 aria-label="Sort threat matrix"
               >
+                <option value="threat">THREAT</option>
+                <option value="dr">DR</option>
+                <option value="traffic">TRAFFIC</option>
                 <option value="state">STATE</option>
                 <option value="match">MATCH</option>
                 <option value="name">NAME</option>
@@ -551,11 +835,16 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
             </span>
           </div>
           <div className="cc-tablewrap">
-            <table className="cc-table cc-war-table">
+            <table className="cc-table cc-war-table wide">
               <thead>
                 <tr>
                   <th>Competitor</th>
                   <th>State</th>
+                  <th>DR</th>
+                  <th>Traffic/Mo</th>
+                  <th>Keywords</th>
+                  <th>Top Market</th>
+                  <th>PPC</th>
                   <th>Match</th>
                   <th>Style</th>
                   <th>Threat</th>
@@ -565,6 +854,7 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
               <tbody>
                 {sorted.map((r) => {
                   const url = r.website_url || (r.domain ? `https://${r.domain}` : null);
+                  const m = r.metrics;
                   return (
                     <tr key={r.id} className={r.id === selected ? "sel" : ""} onClick={() => setSelected(r.id)}>
                       <td>
@@ -586,9 +876,16 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
                         </div>
                       </td>
                       <td>{stateName(r.country_iso2)}</td>
+                      <td className="cc-war-num">{fmtDr(m?.domain_rating)}</td>
+                      <td className="cc-war-num">{fmtCompact(m?.org_traffic)}</td>
+                      <td className="cc-war-num">{fmtCompact(m?.org_keywords)}</td>
+                      <td className="cc-war-num">
+                        {m?.top_country ? `${flagEmoji(m.top_country)} ${m.top_country}` : "—"}
+                      </td>
+                      <td className="cc-war-num">{(m?.paid_keywords ?? 0) > 0 ? m?.paid_keywords : "—"}</td>
                       <td><MatchChip m={r.match_strength} /></td>
                       <td className="cc-war-style">{r.style || "—"}</td>
-                      <td><ThreatChip t={r.threat_level} /></td>
+                      <td><EffectiveThreatChip t={effectiveThreat(r)} /></td>
                       <td>
                         <Eye
                           on={r.watch}
@@ -604,6 +901,9 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
               </tbody>
             </table>
           </div>
+          <div className="cc-war-note">
+            THREAT = founder override where set, otherwise auto score from the Ahrefs pull. TREND — needs ≥2 pulls.
+          </div>
         </div>
 
         {/* ---------- mini EU map ---------- */}
@@ -611,16 +911,17 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
           <div className="cc-panel-h">
             <CcIcon name="map" />
             Rival Map
-            <span className="right">COLOURED BY MATCH STRENGTH</span>
+            <span className="right">COLOURED BY EFFECTIVE THREAT</span>
           </div>
           <div className="cc-war-minimap">
-            <svg viewBox={`0 0 ${map.width} ${map.height}`} role="img" aria-label="EU-27 rivals by match strength">
+            <svg viewBox={`0 0 ${map.width} ${map.height}`} role="img" aria-label="EU-27 rivals by effective threat">
               {(map.contextPaths || []).map((c) => (
                 <path key={`ctx-${c.iso2}`} d={c.d} className="cc-map-context" fill="rgba(16, 28, 44, 0.55)" />
               ))}
               {map.countries.map((c) => {
                 const comp = byIso[c.iso2];
-                const fill = comp?.match_strength ? MATCH_META[comp.match_strength].fill : "rgba(30, 52, 78, 0.4)";
+                const t = comp ? effectiveThreat(comp) : null;
+                const fill = t ? BAND_META[t.band].fill : "rgba(30, 52, 78, 0.4)";
                 const isSel = comp && comp.id === selected;
                 return (
                   <path
@@ -630,16 +931,22 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
                     className={`mm${isSel ? " sel" : ""}`}
                     onClick={() => comp && setSelected(comp.id)}
                   >
-                    <title>{comp ? `${stateName(c.iso2)} — ${comp.name}` : c.name}</title>
+                    <title>
+                      {comp
+                        ? `${stateName(c.iso2)} — ${comp.name} · ${threatLabel(t)}`
+                        : c.name}
+                    </title>
                   </path>
                 );
               })}
             </svg>
           </div>
           <div className="cc-war-legend">
-            <span><span className="dot" style={{ background: MATCH_META.direct.fill }} /> Direct rival</span>
-            <span><span className="dot" style={{ background: MATCH_META.partial.fill }} /> Partial</span>
-            <span><span className="dot" style={{ background: MATCH_META.proxy.fill }} /> Proxy / white space</span>
+            <span><span className="dot" style={{ background: BAND_META.low.fill }} /> Low</span>
+            <span><span className="dot" style={{ background: BAND_META.medium.fill }} /> Medium</span>
+            <span><span className="dot" style={{ background: BAND_META.high.fill }} /> High</span>
+            <span><span className="dot" style={{ background: BAND_META.critical.fill }} /> Critical</span>
+            <span><span className="dot" style={{ background: "rgba(30, 52, 78, 0.4)" }} /> Not scored</span>
             <span><span className="dot" style={{ background: "rgba(16, 28, 44, 0.9)", border: "1px solid var(--cc-line2)" }} /> Non-EU (context)</span>
           </div>
         </div>
@@ -689,7 +996,7 @@ export default function CompetitorsConsole({ map, competitors, markets }: Props)
             Live Intel Feed
             <span className="right">STANDBY</span>
           </div>
-          <div className="cc-notestrip">INTEL FEED COMES ONLINE WITH THE AHREFS / KEYWORD SYNC</div>
+          <div className="cc-notestrip">PRICE &amp; CHANGE MONITORING COMES ONLINE WITH THE FIRECRAWL PHASE</div>
         </div>
       </div>
     </main>

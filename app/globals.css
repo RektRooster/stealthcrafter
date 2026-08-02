@@ -1129,3 +1129,73 @@ table.cc-war-table td { white-space: normal; }
   font-size: 12.5px; line-height: 1.6; color: var(--cc-text);
 }
 .cc-war-insights .row:last-child { border-bottom: 0; }
+
+/* ---------- live Ahrefs enhancement ---------- */
+
+/* HIGH threat band (orange) — between amber (medium) and red (critical) */
+.cc-chip.orange { color: #ff8a3d; border-color: rgba(255, 138, 61, 0.45); background: rgba(255, 138, 61, 0.08); }
+.cc-chip.sm { font-size: 8px; padding: 1px 6px; letter-spacing: 0.12em; }
+
+/* data feed strip under the module header */
+.cc-war-datastrip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 12px 0 0; padding: 8px 14px;
+  border: 1px solid var(--cc-line); border-radius: 8px;
+  background: var(--cc-panel);
+  font-family: var(--cc-mono); font-size: 10px; letter-spacing: 0.12em;
+  color: var(--cc-muted);
+}
+.cc-war-datastrip .k { color: var(--cc-cyan); font-weight: 700; }
+.cc-war-datastrip .sep { color: var(--cc-muted2); }
+.cc-war-datastrip .live {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--cc-green);
+  box-shadow: 0 0 6px rgba(52, 217, 123, 0.8);
+  animation: cc-war-pulse 2.2s ease-in-out infinite;
+}
+@keyframes cc-war-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* SEO read strip (SC 02) under the stat tiles */
+.cc-war-seostrip {
+  display: flex; align-items: flex-start; gap: 12px;
+  margin: 0 0 14px; padding: 10px 14px;
+  border: 1px solid var(--cc-line); border-radius: 8px;
+  background: var(--cc-panel);
+  font-size: 12.5px; line-height: 1.6; color: var(--cc-text);
+}
+.cc-war-seostrip .src {
+  margin-left: auto; flex: 0 0 auto;
+  font-family: var(--cc-mono); font-size: 9px; letter-spacing: 0.14em;
+  color: var(--cc-muted2); padding-top: 3px;
+}
+
+/* wide live-metrics matrix — horizontal scroll on small screens via .cc-tablewrap */
+table.cc-war-table.wide { min-width: 1080px; }
+.cc-war-num { font-family: var(--cc-mono); font-size: 12px; white-space: nowrap; }
+.cc-war-threatcell { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+/* live signals block (selected competitor) */
+.cc-war-signals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-top: 10px; }
+@media (max-width: 480px) { .cc-war-signals { grid-template-columns: 1fr; } }
+.cc-war-signals .sig {
+  display: flex; flex-direction: column; gap: 3px;
+  border: 1px solid var(--cc-line); border-radius: 6px;
+  padding: 8px 10px; background: var(--cc-bg-deep);
+}
+.cc-war-signals .sig .k { font-size: 8.5px; letter-spacing: 0.14em; color: var(--cc-muted); text-transform: uppercase; }
+.cc-war-signals .sig .v { font-family: var(--cc-mono); font-size: 15px; font-weight: 700; color: var(--cc-text); }
+.cc-war-trendhint { margin-top: 8px; font-size: 9.5px; letter-spacing: 0.12em; color: var(--cc-muted2); text-transform: uppercase; }
+
+/* auto threat score + formula line */
+.cc-war-autoscore { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+.cc-war-autoscore .k { font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cc-muted); }
+.cc-war-formula {
+  margin-top: 6px; font-family: var(--cc-mono); font-size: 10px; line-height: 1.55;
+  color: var(--cc-muted2); letter-spacing: 0.02em; overflow-wrap: anywhere;
+}
+
+/* deep links row */
+.cc-war-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
