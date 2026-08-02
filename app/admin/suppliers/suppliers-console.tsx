@@ -117,6 +117,13 @@ function buildAggs(routes: SupplierRoute[]): Record<string, Agg> {
 
 type SortKey = "name" | "country" | "reliability" | "routes" | "trade";
 
+const ROLE_ORDER: Record<string, number> = {
+  primary: 0, distributor: 1, secondary: 2, backup: 3, emergency_retail: 4,
+};
+function roleRank(role: string | null): number {
+  return role != null && role in ROLE_ORDER ? ROLE_ORDER[role] : 9;
+}
+
 const TRADE_ORD: Record<string, number> = { open: 3, applied: 2, to_open: 1, none: 0 };
 
 type Props = { map: EuMapData; data: SuppliersConsoleData };
@@ -546,6 +553,77 @@ export default function SuppliersConsole({ map, data }: Props) {
                 </div>
               </div>
 
+              {/* ---- products from this supplier (grouped by pillar) ---- */}
+              <div className="cc-panel-h" style={{ marginTop: 16 }}>
+                <CcIcon name="products" />
+                Products From This Supplier
+                <span className="right">
+                  {selAgg.productCount} PRODUCT{selAgg.productCount === 1 ? "" : "S"} · {selAgg.routeCount} ROUTE
+                  {selAgg.routeCount === 1 ? "" : "S"}
+                </span>
+              </div>
+              {selAgg.routeCount === 0 ? (
+                <span className="cc-empty">No product routes recorded for this supplier yet.</span>
+              ) : (
+                <div className="cc-sup-coverage">
+                  {[...selAgg.routes]
+                    .sort(
+                      (a, b) =>
+                        (a.product_pillar || "~").localeCompare(b.product_pillar || "~") ||
+                        roleRank(a.role) - roleRank(b.role) ||
+                        a.product_name.localeCompare(b.product_name)
+                    )
+                    .map((rt, i, arr) => {
+                      const showPillar =
+                        i === 0 || (arr[i - 1].product_pillar || "~") !== (rt.product_pillar || "~");
+                      const facts: string[] = [];
+                      if (rt.ships_from_country) facts.push(`SHIPS FROM ${rt.ships_from_country.toUpperCase()}`);
+                      if (rt.fulfilment_region) facts.push(`FULFILMENT ${rt.fulfilment_region}`);
+                      if (rt.lead_time) facts.push(`LEAD ${rt.lead_time.toUpperCase()}`);
+                      if (rt.moq != null) facts.push(`MOQ ${rt.moq}`);
+                      if (rt.import_duty_risk && rt.import_duty_risk !== "none")
+                        facts.push(`DUTY RISK ${rt.import_duty_risk.toUpperCase()}`);
+                      return (
+                        <div key={rt.id}>
+                          {showPillar ? (
+                            <div className="cc-sup-pillarhead">{rt.product_pillar || "UNASSIGNED PILLAR"}</div>
+                          ) : null}
+                          <div className="cc-sup-route">
+                            <div className="top">
+                              <Link href={`/admin/product/${rt.product_id}`} className="pn">
+                                {rt.product_name}
+                              </Link>
+                              {rt.role ? (
+                                <span className="cc-chip muted plain sm">{rt.role.replace(/_/g, " ").toUpperCase()}</span>
+                              ) : null}
+                              {rt.product_eu_sourcing === "wholesaler_available" ? (
+                                <span className="cc-chip amber plain sm" title="EU wholesaler carries it — no trade account yet">EU-SOURCED</span>
+                              ) : null}
+                              {rt.product_eu_sourcing === "trade_confirmed" ? (
+                                <span className="cc-chip green plain sm" title="Trade account open / real landed cost">TRADE</span>
+                              ) : null}
+                              <StockChip s={rt.stock_status} />
+                            </div>
+                            <div className="mid">
+                              <span className="pr">
+                                {rt.wholesale_price != null
+                                  ? `${fmtEur(rt.wholesale_price)}${rt.vat_included === true ? " inc VAT" : rt.vat_included === false ? " ex VAT" : ""}`
+                                  : "no price"}
+                              </span>
+                              {rt.source_url ? (
+                                <a href={rt.source_url} target="_blank" rel="noopener noreferrer" className="src">
+                                  SOURCE ↗
+                                </a>
+                              ) : null}
+                            </div>
+                            {facts.length ? <div className="facts">{facts.join(" · ")}</div> : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+
               {/* ---- edit workflow ---- */}
               <div className="cc-panel-h" style={{ marginTop: 14 }}>
                 <CcIcon name="settings" />
@@ -618,54 +696,6 @@ export default function SuppliersConsole({ map, data }: Props) {
                   {msg ? <span className={`savemsg ${msg.ok ? "ok" : "err"}`}>{msg.text}</span> : null}
                 </div>
               </div>
-
-              {/* ---- product coverage ---- */}
-              <div className="cc-panel-h" style={{ marginTop: 16 }}>
-                <CcIcon name="products" />
-                Product Coverage
-                <span className="right">
-                  {selAgg.routeCount} ROUTE{selAgg.routeCount === 1 ? "" : "S"}
-                </span>
-              </div>
-              {selAgg.routeCount === 0 ? (
-                <span className="cc-empty">No product routes recorded for this supplier yet.</span>
-              ) : (
-                <div className="cc-sup-coverage">
-                  {selAgg.routes.map((rt) => {
-                    const facts: string[] = [];
-                    if (rt.ships_from_country) facts.push(`SHIPS FROM ${rt.ships_from_country.toUpperCase()}`);
-                    if (rt.fulfilment_region) facts.push(`FULFILMENT ${rt.fulfilment_region}`);
-                    if (rt.lead_time) facts.push(`LEAD ${rt.lead_time.toUpperCase()}`);
-                    if (rt.moq != null) facts.push(`MOQ ${rt.moq}`);
-                    if (rt.import_duty_risk && rt.import_duty_risk !== "none")
-                      facts.push(`DUTY RISK ${rt.import_duty_risk.toUpperCase()}`);
-                    return (
-                      <div key={rt.id} className="cc-sup-route">
-                        <div className="top">
-                          <Link href={`/admin/product/${rt.product_id}`} className="pn">
-                            {rt.product_name}
-                          </Link>
-                          {rt.role ? <span className="cc-chip muted plain sm">{rt.role.replace(/_/g, " ").toUpperCase()}</span> : null}
-                          <StockChip s={rt.stock_status} />
-                        </div>
-                        <div className="mid">
-                          <span className="pr">
-                            {rt.wholesale_price != null
-                              ? `${fmtEur(rt.wholesale_price)}${rt.vat_included === true ? " inc VAT" : rt.vat_included === false ? " ex VAT" : ""}`
-                              : "no price"}
-                          </span>
-                          {rt.source_url ? (
-                            <a href={rt.source_url} target="_blank" rel="noopener noreferrer" className="src">
-                              SOURCE ↗
-                            </a>
-                          ) : null}
-                        </div>
-                        {facts.length ? <div className="facts">{facts.join(" · ")}</div> : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
 
               {sel.notes ? (
                 <>

@@ -83,6 +83,23 @@ export function CcIcon({ name, size = 14 }: { name: string; size?: number }) {
           <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" />
         </svg>
       );
+    case "orders":
+      return (
+        <svg {...common}>
+          <path d="M3 4h3l2.5 12.5a1.5 1.5 0 001.5 1.2h8.6a1.5 1.5 0 001.5-1.2L22 8H7" />
+          <circle cx="10.5" cy="21" r="1.3" />
+          <circle cx="18" cy="21" r="1.3" />
+        </svg>
+      );
+    case "customers":
+      return (
+        <svg {...common}>
+          <circle cx="8.5" cy="8" r="3.2" />
+          <path d="M2 20c.8-3.6 3.4-5.2 6.5-5.2S14.2 16.4 15 20" />
+          <circle cx="16.5" cy="8.8" r="2.6" />
+          <path d="M15.5 14.6c3.2 0 5.6 1.5 6.3 5.1" />
+        </svg>
+      );
     case "logo":
       return (
         <svg {...common} width={size} height={size} strokeWidth={1.6}>
@@ -103,6 +120,8 @@ const TABS = [
   { href: "/admin/competitors", label: "Competitors", icon: "competitors" },
   { href: "/admin/testing", label: "Testing", icon: "testing" },
   { href: "/admin/compliance", label: "Compliance", icon: "compliance" },
+  { href: "/admin/orders", label: "Orders", icon: "orders" },
+  { href: "/admin/customers", label: "Customers", icon: "customers" },
   { href: "/admin/jimmy", label: "Jimmy", icon: "jimmy" },
   { href: "/admin/settings", label: "Settings", icon: "settings" },
 ];

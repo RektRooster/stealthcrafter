@@ -50,6 +50,7 @@ export type SupplierRoute = {
   product_name: string;
   product_pillar: string | null;
   product_hero: boolean;
+  product_eu_sourcing: string | null;
 };
 
 export type UncoveredHero = { id: string; name: string; pillar: string | null };
@@ -136,11 +137,11 @@ export async function getSuppliersConsole(): Promise<SuppliersConsoleData | null
 
   // ---- join product names onto routes (chunked id lookup) ----
   const coveredIds = [...new Set(routeRows.map((r: any) => r.product_id).filter(Boolean).map(String))];
-  const prodMap: Record<string, { name: string; pillar: string | null; hero: boolean }> = {};
+  const prodMap: Record<string, { name: string; pillar: string | null; hero: boolean; eu_sourcing: string | null }> = {};
   for (let i = 0; i < coveredIds.length; i += 200) {
     const { data, error } = await sb
       .from("products")
-      .select("id,sc_product_name,product_name,example_product,pillar,hero_product")
+      .select("id,sc_product_name,product_name,example_product,pillar,hero_product,eu_sourcing")
       .in("id", coveredIds.slice(i, i + 200));
     if (error) throw error;
     (data || []).forEach((p: any) => {
@@ -148,6 +149,7 @@ export async function getSuppliersConsole(): Promise<SuppliersConsoleData | null
         name: productName(p),
         pillar: p.pillar ?? null,
         hero: Boolean(p.hero_product),
+        eu_sourcing: p.eu_sourcing ?? null,
       };
     });
   }
@@ -177,6 +179,7 @@ export async function getSuppliersConsole(): Promise<SuppliersConsoleData | null
         product_name: p?.name || "Unknown product",
         product_pillar: p?.pillar ?? null,
         product_hero: Boolean(p?.hero),
+        product_eu_sourcing: p?.eu_sourcing ?? null,
       };
     });
 

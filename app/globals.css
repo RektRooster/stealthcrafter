@@ -2301,8 +2301,22 @@ table.cc-sup-table { min-width: 920px; }
 .cc-sup-caveat { color: var(--cc-amber); margin-left: 3px; cursor: help; font-weight: 700; }
 
 /* ---------- right: selected supplier ---------- */
-.cc-sup-side { position: sticky; top: 14px; }
-@media (max-width: 1250px) { .cc-sup-side { position: static; } }
+.cc-sup-side {
+  position: sticky; top: 14px;
+  /* the panel can be taller than the viewport (workflow + product list) —
+     without its own scroll, sticky pins the overflow out of reach */
+  max-height: calc(100vh - 28px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+@media (max-width: 1250px) { .cc-sup-side { position: static; max-height: none; } }
+.cc-sup-pillarhead {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.18em;
+  color: var(--cc-cyan); text-transform: uppercase;
+  margin: 10px 0 6px; padding-bottom: 3px;
+  border-bottom: 1px solid var(--cc-line);
+}
+.cc-sup-coverage > div:first-child .cc-sup-pillarhead { margin-top: 0; }
 .cc-sup-coverage {
   display: flex; flex-direction: column; gap: 8px;
   max-height: 380px; overflow-y: auto; padding-right: 2px;
