@@ -28,7 +28,11 @@ export async function POST(req: NextRequest) {
     if (!convId) {
       const { data, error } = await sb
         .from("jimmy_conversations")
-        .insert({ profile_id: profileId ?? null, surface: "console", meta: {} })
+        .insert({
+          profile_id: profileId ?? null,
+          surface: surface === "preview" ? "preview" : "console",
+          meta: {},
+        })
         .select("id")
         .single();
       if (error) throw error;

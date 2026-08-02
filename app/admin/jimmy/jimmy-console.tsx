@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useRef, useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CcIcon } from "../cc-chrome";
 import type {
@@ -112,6 +113,9 @@ export default function JimmyConsole({ data }: { data: JimmyConsoleData }) {
             SC 03 authors him; SC 05 hosts him.
           </div>
         </div>
+        <Link href="/admin/jimmy/preview" className="cc-jcx-navlink">
+          CUSTOMER PREVIEW →
+        </Link>
       </div>
 
       {/* header strip — everything read from live settings, never hardcoded */}
