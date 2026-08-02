@@ -2354,3 +2354,91 @@ table.cc-sup-table { min-width: 920px; }
 }
 .cc-sup-uncovered .unc:hover { border-color: var(--cc-green); }
 .cc-sup-uncovered .unc .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+/* =====================================================================
+   COMPLIANCE module — exposure console + SC 08 register (cc-comp-*)
+   Red/amber is the module accent (exposure), on the shared cc tokens.
+   ===================================================================== */
+
+/* ---------- ownership banner: SC 08 owns rulings, not this console ---------- */
+.cc-comp-banner {
+  margin: 10px 0 2px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 179, 64, 0.35);
+  border-left: 3px solid var(--cc-amber);
+  border-radius: 8px;
+  background: rgba(255, 179, 64, 0.06);
+  color: var(--cc-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.6;
+}
+
+/* ---------- register table ---------- */
+table.cc-comp-regtable { min-width: 720px; }
+.cc-comp-title {
+  font-weight: 600;
+  white-space: normal !important;
+  min-width: 220px;
+  line-height: 1.45;
+}
+
+/* ---------- detail drawer ---------- */
+.cc-comp-detail { position: sticky; top: 14px; }
+@media (max-width: 1250px) { .cc-comp-detail { position: static; } }
+.cc-comp-detailtitle { font-size: 15px; font-weight: 700; margin: 6px 0 0; line-height: 1.45; }
+.cc-comp-detail .cc-notelabel { margin-top: 12px; }
+.cc-comp-ruled {
+  margin-top: 12px;
+  border: 1px solid rgba(52, 217, 123, 0.35);
+  border-radius: 8px;
+  background: rgba(52, 217, 123, 0.05);
+  padding: 10px 12px;
+}
+.cc-comp-ruled .cc-notelabel { margin-top: 0; color: var(--cc-green); }
+.cc-comp-ruled .who {
+  margin-top: 8px;
+  font-family: var(--cc-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--cc-muted);
+}
+.cc-comp-affected { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.cc-comp-affected .af {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border: 1px solid var(--cc-line); border-radius: 8px;
+  background: var(--cc-bg-deep); padding: 8px 11px;
+  color: var(--cc-text); text-decoration: none; font-size: 12px;
+}
+.cc-comp-affected .af:hover { border-color: var(--cc-cyan); }
+.cc-comp-affected .af .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+/* ---------- flagged products ---------- */
+.cc-comp-flagwrap { max-height: 520px; overflow-y: auto; }
+table.cc-comp-flagtable { min-width: 760px; }
+.cc-comp-prodlink { color: var(--cc-text); text-decoration: none; font-weight: 600; }
+.cc-comp-prodlink:hover { color: var(--cc-cyan); text-decoration: underline; }
+.cc-comp-flags { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* ---------- restrictions ---------- */
+.cc-comp-restrlist { display: flex; flex-direction: column; }
+.cc-comp-restrlist .rr {
+  display: grid; grid-template-columns: minmax(140px, 0.9fr) 1.5fr;
+  gap: 10px; align-items: center;
+  border-bottom: 1px solid var(--cc-line);
+  padding: 9px 2px;
+  color: var(--cc-text); text-decoration: none; font-size: 12px;
+}
+.cc-comp-restrlist .rr:last-child { border-bottom: 0; }
+.cc-comp-restrlist .rr:hover { background: rgba(255, 179, 64, 0.05); }
+.cc-comp-restrlist .rr .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-comp-restrlist .rr .tx {
+  font-family: var(--cc-mono); font-size: 10px; letter-spacing: 0.04em;
+  color: var(--cc-amber);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ---------- AI safety panel ---------- */
+.cc-comp-jimmylink { text-decoration: none; }
+.cc-comp-jimmylink:hover { color: var(--cc-cyan); }
