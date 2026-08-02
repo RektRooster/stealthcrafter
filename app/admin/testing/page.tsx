@@ -1,11 +1,20 @@
-import ModuleStub from "../module-stub";
+import { getTestLabHome } from "@/lib/testing-data";
+import TestLabHome from "./test-lab-home";
 
-export default function TestingPage() {
-  return (
-    <ModuleStub
-      title="TESTING"
-      icon="testing"
-      desc="StealthCrafter Tested programme — field test records, tested reports and pass/fail verdicts feeding the product pipeline."
-    />
-  );
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+export default async function TestingPage() {
+  const data = await getTestLabHome();
+  if (!data) {
+    return (
+      <main className="cc-container">
+        <div className="cc-notice">
+          Data source not configured — set <code>SUPABASE_URL</code> and{" "}
+          <code>SUPABASE_SERVICE_ROLE_KEY</code> to bring the Test Lab online.
+        </div>
+      </main>
+    );
+  }
+  return <TestLabHome data={data} />;
 }
