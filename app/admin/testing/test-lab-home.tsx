@@ -134,22 +134,26 @@ export default function TestLabHome({ data }: { data: TestLabHomeData }) {
           ) : (
             <>
               <div className="cc-tablewrap">
-                <table className="cc-table" style={{ minWidth: 860 }}>
+                <table className="cc-table">
                   <thead>
                     <tr>
                       <th></th>
                       <th>Product</th>
-                      <th>Brand</th>
                       <th>Pillar</th>
-                      <th>Category</th>
                       <th>Priority</th>
-                      <th>Status</th>
-                      <th></th>
+                      <th style={{ textAlign: "right" }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.slice(0, QUEUE_CAP).map((p) => (
-                      <tr key={p.id} style={{ cursor: "default" }}>
+                      <tr
+                        key={p.id}
+                        style={{ cursor: startingId ? "wait" : "pointer" }}
+                        title="Start a test session for this product"
+                        onClick={() => {
+                          if (!startingId) startTest(p.id);
+                        }}
+                      >
                         <td>
                           {firstImage(p.image_urls) ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -160,16 +164,18 @@ export default function TestLabHome({ data }: { data: TestLabHomeData }) {
                         </td>
                         <td>
                           <div className="cc-prodname">{displayName(p)}</div>
-                          <div className="cc-prodsub">{scId(p)}</div>
+                          <div className="cc-prodsub">
+                            {p.brand ? `${p.brand} · ` : ""}
+                            {scId(p)}
+                            {p.category ? ` · ${p.category}` : ""}
+                          </div>
                         </td>
-                        <td>{p.brand || "—"}</td>
                         <td>{p.pillar || "—"}</td>
-                        <td>{p.category || "—"}</td>
                         <td>
                           {highPriority(p) ? (
                             <span className="cc-chip red plain">HIGH</span>
                           ) : (
-                            <span className="cc-chip muted plain">STANDARD</span>
+                            <span className="cc-chip muted plain">STD</span>
                           )}
                           {testedSet.has(p.id) ? (
                             <span className="cc-chip green plain" style={{ marginLeft: 6 }}>
@@ -177,17 +183,15 @@ export default function TestLabHome({ data }: { data: TestLabHomeData }) {
                             </span>
                           ) : null}
                         </td>
-                        <td>
-                          <span className="cc-chip muted plain">
-                            {(p.product_status || p.research_stage || "—").toString().replace(/_/g, " ").toUpperCase()}
-                          </span>
-                        </td>
-                        <td>
+                        <td style={{ textAlign: "right" }}>
                           <button
                             type="button"
                             className="cc-btn"
                             disabled={startingId !== null}
-                            onClick={() => startTest(p.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startTest(p.id);
+                            }}
                           >
                             {startingId === p.id ? "STARTING…" : "START TEST"}
                           </button>
