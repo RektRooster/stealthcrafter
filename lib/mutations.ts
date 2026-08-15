@@ -13,11 +13,11 @@ const ALLOWED = new Set<string>([
   "search_keywords",
   "research_stage", "product_status", "research_confidence",
   "needs_review", "safety_critical", "dangerous_goods", "ce_certified",
-  "images_complete", "hero_product",
+  "images_complete", "hero_product", "super_hero",
   "internal_notes", "customer_notes", "image_urls",
 ]);
 const NUMERIC = new Set(["retail_price_rrp", "landed_cost", "category_id"]);
-const BOOLEAN = new Set(["needs_review", "safety_critical", "dangerous_goods", "ce_certified", "images_complete", "hero_product"]);
+const BOOLEAN = new Set(["needs_review", "safety_critical", "dangerous_goods", "ce_certified", "images_complete", "hero_product", "super_hero"]);
 
 function clean(patch: Record<string, any>): Record<string, any> {
   const out: Record<string, any> = {};

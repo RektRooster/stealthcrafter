@@ -92,6 +92,7 @@ export default function ProductsConsole({ products }: { products: any[] }) {
   const [status, setStatus] = useState("");
   const [conf, setConf] = useState("");
   const [sort, setSort] = useState("name");
+  const [superOnly, setSuperOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const pillars = useMemo(() => uniqSorted(products.map((p) => p.pillar)), [products]);
@@ -107,6 +108,7 @@ export default function ProductsConsole({ products }: { products: any[] }) {
       if (euSrc && (p.eu_sourcing || "unsourced") !== euSrc) return false;
       if (status && p.product_status !== status) return false;
       if (conf && p.research_confidence !== conf) return false;
+      if (superOnly && !p.super_hero) return false;
       if (needle) {
         const hay = `${displayName(p)} ${p.brand || ""} ${p.example_product || ""} ${p.subcategory || ""} ${p.product_type || ""} ${p.sku || ""}`.toLowerCase();
         if (!hay.includes(needle)) return false;
@@ -121,10 +123,10 @@ export default function ProductsConsole({ products }: { products: any[] }) {
       return displayName(a).localeCompare(displayName(b));
     });
     return list;
-  }, [products, q, pillar, category, stage, euSrc, status, conf, sort]);
+  }, [products, q, pillar, category, stage, euSrc, status, conf, superOnly, sort]);
 
   const stats = useMemo(() => {
-    const s = { total: filtered.length, finalised: 0, review: 0, hold: 0, supplier: 0, heroes: 0 };
+    const s = { total: filtered.length, finalised: 0, review: 0, hold: 0, supplier: 0, heroes: 0, superheroes: 0 };
     for (const p of filtered) {
       const approved = p.product_status === "approved" || p.product_status === "listed";
       if (approved && p.images_complete) s.finalised++;
@@ -132,6 +134,7 @@ export default function ProductsConsole({ products }: { products: any[] }) {
       if (p.dangerous_goods) s.hold++;
       if ((p.supplier_count || 0) > 0) s.supplier++;
       if (p.hero_product) s.heroes++;
+      if (p.super_hero) s.superheroes++;
     }
     return s;
   }, [filtered]);
@@ -195,13 +198,13 @@ export default function ProductsConsole({ products }: { products: any[] }) {
   function exportCsv() {
     const header = [
       "sc_id", "name", "brand", "pillar", "category", "type", "research_stage", "eu_sourcing", "product_status",
-      "confidence", "needs_review", "dangerous_goods", "hero", "supplier_count", "primary_supplier",
+      "confidence", "needs_review", "dangerous_goods", "hero", "super_hero", "supplier_count", "primary_supplier",
       "stock_status", "cost", "sell_price", "margin_pct",
     ];
     const rows = filtered.map((p) => [
       scId(p), displayName(p), p.brand, p.pillar, p.category, p.subcategory || p.product_type,
       p.research_stage, p.eu_sourcing || "unsourced", p.product_status, p.research_confidence,
-      p.needs_review ? "yes" : "no", p.dangerous_goods ? "yes" : "no", p.hero_product ? "yes" : "no",
+      p.needs_review ? "yes" : "no", p.dangerous_goods ? "yes" : "no", p.hero_product ? "yes" : "no", p.super_hero ? "yes" : "no",
       p.supplier_count || 0, p.primary_route?.supplier_name || "",
       p.primary_route?.stock_status || "", costPrice(p) ?? "", sellPrice(p) ?? "",
       marginPct(p) !== null ? marginPct(p)!.toFixed(1) : "",
@@ -242,6 +245,17 @@ export default function ProductsConsole({ products }: { products: any[] }) {
           <div className="cc-stat red"><div className="n">{stats.hold}</div><div className="l">Compliance Hold</div></div>
           <div className="cc-stat cyan"><div className="n">{stats.supplier}</div><div className="l">Supplier Ready</div></div>
           <div className="cc-stat cyan"><div className="n">{stats.heroes}</div><div className="l">Heroes</div></div>
+          <div
+            className="cc-stat amber"
+            role="button"
+            tabIndex={0}
+            title="Best-in-class curated range — click to filter"
+            onClick={() => setSuperOnly(!superOnly)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSuperOnly(!superOnly); }}
+            style={{ cursor: "pointer", ...(superOnly ? { outline: "1px solid #b8860b", boxShadow: "0 0 0 1px #b8860b inset" } : {}) }}
+          >
+            <div className="n">{stats.superheroes}</div><div className="l">⭐ Super Heroes</div>
+          </div>
         </div>
 
         <div className="cc-controls">
@@ -350,6 +364,7 @@ export default function ProductsConsole({ products }: { products: any[] }) {
                       <div className="cc-prodname">
                         {displayName(p)}
                         {p.hero_product ? <span className="cc-chip cyan plain" style={{ marginLeft: 8 }}>HERO</span> : null}
+                        {p.super_hero ? <span className="cc-chip amber plain" style={{ marginLeft: 8 }}>⭐ SUPER</span> : null}
                         {p.eu_sourcing === "wholesaler_available" ? <span className="cc-chip amber plain" style={{ marginLeft: 8 }} title="EU wholesaler carries it — no trade account yet">EU-SOURCED</span> : null}
                         {p.eu_sourcing === "trade_confirmed" ? <span className="cc-chip green plain" style={{ marginLeft: 8 }} title="Trade account open / real landed cost">TRADE</span> : null}
                       </div>

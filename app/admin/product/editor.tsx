@@ -170,6 +170,7 @@ export default function ProductEditor({
             {C("ce_certified", "CE certified")}
             {C("images_complete", "Images complete")}
             {C("hero_product", "Hero product")}
+            {C("super_hero", "⭐ Super hero (best-in-class)")}
           </div>
         </section>
 
