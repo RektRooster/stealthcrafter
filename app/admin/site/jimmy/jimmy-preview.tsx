@@ -248,6 +248,7 @@ export default function JimmyPreview({ data }: { data: JimmyPreviewData }) {
   const recRef = useRef<any>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const autoSentRef = useRef(false);
   const greetCounter = useRef(0);
 
   useEffect(() => {
@@ -268,6 +269,24 @@ export default function JimmyPreview({ data }: { data: JimmyPreviewData }) {
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" });
   }, [thread]);
+
+  // Hand-off from the homepage: ?q= carries the visitor's first question into
+  // the conversation so the journey is never restarted. Fires once, and goes
+  // through the identical guarded pipeline as anything typed here.
+  useEffect(() => {
+    if (autoSentRef.current) return;
+    let q: string | null = null;
+    try {
+      q = new URLSearchParams(window.location.search).get("q");
+    } catch {
+      q = null;
+    }
+    if (q && q.trim()) {
+      autoSentRef.current = true;
+      void send(q.trim());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function stopAudio() {
     if (audioRef.current) {
