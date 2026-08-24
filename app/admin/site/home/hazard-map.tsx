@@ -17,12 +17,21 @@ type Props = {
 
 type View = { x: number; y: number; w: number; h: number };
 
+// Tuned for a dark map: the previous set was only a shade or two off the land
+// underneath it, so nothing read at a glance. These sit well clear of both the
+// sea and the two land tones below.
 const SEV_COLOR: Record<string, string> = {
-  info: "#6f7f8c",
-  watch: "#c9a227",
-  elevated: "#d4762a",
-  severe: "#c8442e",
+  info: "#8fb3d1",
+  watch: "#f2c744",
+  elevated: "#f5913c",
+  severe: "#f4553c",
 };
+
+/* Base land colours. Countries are filled with an opaque blend of these and
+   the severity colour, so a tinted country keeps its land identity instead of
+   compositing straight onto the sea. */
+const LAND_EU = "#3f3d31";
+const LAND_CTX = "#242e39";
 
 const SEV_LABEL: Record<string, string> = {
   info: "Informational",
@@ -82,7 +91,9 @@ export default function HazardMap({
   const [country, setCountry] = useState<string | null>(null);
   const [hover, setHover] = useState<{ iso2: string; name: string; x: number; y: number } | null>(null);
   const [active, setActive] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<View>(FULL);
+  const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const animRef = useRef<number | null>(null);
@@ -176,6 +187,20 @@ export default function HazardMap({
       animateTo(frame(e.xy.x - w / 2, e.xy.y - w / AR / 2, w, w / AR, 0));
     },
     [animateTo, frame, width, AR]
+  );
+
+  /* Clicking a marker is the whole point of the map: it opens that event in
+     the rail, scrolls it into view and flies to it. */
+  const selectEvent = useCallback(
+    (e: HazardEvent, fly = true) => {
+      setSelected(e.id);
+      setActive(e.id);
+      if (fly) zoomToEvent(e);
+      window.setTimeout(() => {
+        itemRefs.current[e.id]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 60);
+    },
+    [zoomToEvent]
   );
 
   /* client point -> map coordinate */
@@ -294,8 +319,14 @@ export default function HazardMap({
   );
 
   const plotted = useMemo(() => shown.filter((e) => e.xy), [shown]);
+
+  // A layer toggle or a country change can filter the selected event away.
+  useEffect(() => {
+    if (selected && !shown.some((e) => e.id === selected)) setSelected(null);
+  }, [shown, selected]);
   const countryName = country ? countries.find((c) => c.iso2 === country)?.name ?? country : null;
   const worstNow = shown[0];
+  const featured = (selected && shown.find((e) => e.id === selected)) || worstNow;
 
   function toggle(src: HazardSource) {
     setOff((prev) => {
@@ -385,8 +416,8 @@ export default function HazardMap({
           >
             <defs>
               <radialGradient id="hz-sea" cx="50%" cy="42%" r="72%">
-                <stop offset="0%" stopColor="#0d1620" />
-                <stop offset="100%" stopColor="#080d13" />
+                <stop offset="0%" stopColor="#101c27" />
+                <stop offset="100%" stopColor="#0a121a" />
               </radialGradient>
             </defs>
             <rect x={0} y={0} width={width} height={height} fill="url(#hz-sea)" />
@@ -402,7 +433,14 @@ export default function HazardMap({
                   d={c.d}
                   vectorEffect="non-scaling-stroke"
                   className={`sf-hz-country${c.eu ? " eu" : " ctx"}${selected ? " sel" : ""}`}
-                  style={worst >= 1 ? { fill: hexA(SEV_COLOR[sevKey], c.eu ? 0.17 : 0.12) } : undefined}
+                  style={{
+                    fill:
+                      worst >= 1
+                        ? mix(c.eu ? LAND_EU : LAND_CTX, SEV_COLOR[sevKey], c.eu ? 0.42 : 0.32)
+                        : c.eu
+                        ? LAND_EU
+                        : LAND_CTX,
+                  }}
                   onMouseEnter={() => setHover({ iso2: c.iso2, name: c.name, x: c.labelX, y: c.labelY })}
                   onClick={() => handleCountry(c)}
                 />
@@ -425,16 +463,23 @@ export default function HazardMap({
 
             {plotted.map((e) => {
               const isActive = active === e.id;
+              const isSel = selected === e.id;
               const big = e.severity === "severe";
               return (
                 <g
                   key={e.id}
                   transform={`translate(${e.xy!.x},${e.xy!.y}) scale(${k})`}
-                  className={`sf-hz-marker sev-${e.severity}${isActive ? " active" : ""}`}
+                  className={`sf-hz-marker sev-${e.severity}${isActive ? " active" : ""}${isSel ? " selected" : ""}`}
                   style={{ color: SEV_COLOR[e.severity] }}
                   onMouseEnter={() => setActive(e.id)}
                   onMouseLeave={() => setActive(null)}
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    if (suppressClick.current) return;
+                    selectEvent(e);
+                  }}
                 >
+                  {isSel && <circle r={big ? 21 : 18} className="sf-hz-selring" />}
                   {(big || e.severity === "elevated") && (
                     <circle r={big ? 15 : 11} className="sf-hz-halo" />
                   )}
@@ -508,26 +553,79 @@ export default function HazardMap({
         </div>
 
         <aside className="sf-hz-rail">
-          {worstNow && (
-            <div className="sf-hz-lead" style={{ borderColor: hexA(SEV_COLOR[worstNow.severity], 0.55) }}>
-              <div className="sf-hz-leadtag" style={{ color: SEV_COLOR[worstNow.severity] }}>
-                {SEV_LABEL[worstNow.severity]}
+          {featured && (
+            <div
+              className={`sf-hz-lead${selected ? " selected" : ""}`}
+              style={{ borderColor: hexA(SEV_COLOR[featured.severity], 0.7) }}
+            >
+              <div className="sf-hz-leadhead">
+                <span className="sf-hz-leadtag" style={{ color: SEV_COLOR[featured.severity] }}>
+                  {SEV_LABEL[featured.severity]}
+                </span>
+                {selected ? (
+                  <button type="button" className="sf-hz-leadclear" onClick={() => setSelected(null)}>
+                    Selected from map ✕
+                  </button>
+                ) : (
+                  <span className="sf-hz-leadhint">Most significant right now</span>
+                )}
               </div>
-              <div className="sf-hz-leadtitle">{worstNow.title}</div>
-              <p>{worstNow.summary}</p>
+              <div className="sf-hz-leadtitle">{featured.title}</div>
+              <p>{featured.summary}</p>
+              <dl className="sf-hz-facts">
+                <div>
+                  <dt>Source</dt>
+                  <dd>{featured.source}</dd>
+                </div>
+                {featured.magnitude !== null && (
+                  <div>
+                    <dt>Measured</dt>
+                    <dd>
+                      {featured.magnitude.toLocaleString("en-GB")} {featured.unit}
+                    </dd>
+                  </div>
+                )}
+                {featured.countryIso2 && (
+                  <div>
+                    <dt>Country</dt>
+                    <dd>{featured.countryIso2}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt>Recorded</dt>
+                  <dd>{timeAgo(featured.at)}</dd>
+                </div>
+              </dl>
+              <div className="sf-hz-leadpillars">
+                {featured.pillars.map((p) => (
+                  <span key={p} className="sf-hz-pillar">
+                    {p}
+                  </span>
+                ))}
+              </div>
               <div className="sf-hz-leadactions">
                 <Link
                   className="sf-hz-ask"
                   href={`/admin/site/jimmy?q=${encodeURIComponent(
-                    `There is a ${worstNow.kind} event — ${worstNow.title}. What should my household do to be ready for something like this?`
+                    `There is a ${featured.kind} event — ${featured.title}. What should my household do to be ready for something like this?`
                   )}`}
                 >
                   Ask Jimmy what this means for my household →
                 </Link>
-                {worstNow.xy && (
-                  <button type="button" className="sf-hz-locate" onClick={() => zoomToEvent(worstNow)}>
+                {featured.xy && (
+                  <button type="button" className="sf-hz-locate" onClick={() => selectEvent(featured)}>
                     Show on map
                   </button>
+                )}
+                {featured.url && (
+                  <a
+                    className="sf-hz-locate"
+                    href={featured.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    Source report
+                  </a>
                 )}
               </div>
             </div>
@@ -541,11 +639,16 @@ export default function HazardMap({
             {shown.slice(0, 40).map((e) => (
               <li
                 key={e.id}
-                className={`sf-hz-item${active === e.id ? " active" : ""}${e.xy ? " clickable" : ""}`}
+                ref={(el) => {
+                  itemRefs.current[e.id] = el;
+                }}
+                className={`sf-hz-item${active === e.id ? " active" : ""}${
+                  selected === e.id ? " selected" : ""
+                }${e.xy ? " clickable" : ""}`}
                 onMouseEnter={() => setActive(e.id)}
                 onMouseLeave={() => setActive(null)}
-                onClick={() => zoomToEvent(e)}
-                title={e.xy ? "Zoom to this event" : undefined}
+                onClick={() => selectEvent(e)}
+                title={e.xy ? "Show this event on the map" : undefined}
               >
                 <span className="sf-hz-itembar" style={{ background: SEV_COLOR[e.severity] }} />
                 <div className="sf-hz-itembody">
@@ -601,6 +704,18 @@ export default function HazardMap({
       </div>
     </div>
   );
+}
+
+/* Opaque blend of two hex colours — t=0 keeps a, t=1 gives b. */
+function mix(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const ch = (sh: number) => {
+    const va = (pa >> sh) & 255;
+    const vb = (pb >> sh) & 255;
+    return Math.round(va + (vb - va) * t);
+  };
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
 }
 
 function hexA(hex: string, a: number): string {
