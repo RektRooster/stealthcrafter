@@ -423,7 +423,11 @@ function reasonFor(c: KitItem, weakest: Pillar): string {
   const claims: [Pillar, string | null][] = [
     [
       "water",
-      a.waterStoreL
+      // Lead with whichever contribution actually dominates — a filter bottle
+      // that holds 0.6 L but treats 300 is a treatment product, not storage.
+      (a.waterTreatL ?? 0) > (a.waterStoreL ?? 0) * 10
+        ? `Treats up to ${a.waterTreatL!.toLocaleString("en-GB")} L`
+        : a.waterStoreL
         ? `Adds ${a.waterStoreL.toFixed(1)} L of stored water`
         : a.waterTreatL
         ? `Treats up to ${a.waterTreatL.toLocaleString("en-GB")} L`

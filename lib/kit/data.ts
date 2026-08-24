@@ -2,7 +2,7 @@ import { supabaseAdmin } from "../supabase";
 import { deriveAttrs, hasKitValue, parseShelfLifeMonths, parseWeightKg } from "./attributes";
 import type { KitItem } from "./sim";
 import { parseImages } from "../catalogue-data";
-import { getMeasuredByProduct } from "../tested-data";
+import { getFailedProductIds, getMeasuredByProduct } from "../tested-data";
 
 const FIELDS =
   "id,slug,sc_product_name,product_name,brand,pillar,category_id,selling_price,currency," +
@@ -71,7 +71,10 @@ export async function getKitCatalogue(): Promise<KitCatalogue> {
   const sb = supabaseAdmin();
   if (!sb) return { configured: false, items: [] };
 
-  const measuredByProduct = await getMeasuredByProduct().catch(() => ({}));
+  const [measuredByProduct, failedIds] = await Promise.all([
+    getMeasuredByProduct().catch(() => ({})),
+    getFailedProductIds().catch(() => new Set<string>()),
+  ]);
 
   const { data: catRows } = await sb.from("categories").select("id,name");
   const cats: Record<number, string> = {};
@@ -88,7 +91,7 @@ export async function getKitCatalogue(): Promise<KitCatalogue> {
   }
 
   const items = rows
-    .filter((r) => r.slug && r.product_status !== "rejected")
+    .filter((r) => r.slug && r.product_status !== "rejected" && !failedIds.has(r.id))
     .map((r) => {
       const name = r.sc_product_name || r.product_name || "Unnamed product";
       const category = cats[r.category_id] || "Uncategorised";

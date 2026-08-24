@@ -328,6 +328,21 @@ export async function getProtocol() {
   return data || [];
 }
 
+/** Products that failed a completed test. We would not sell these, so nothing
+    downstream — the Kit Builder, the portal, any recommendation — may offer
+    them. Note this deliberately ignores `published`: a failure being absent
+    from the storefront must not make it invisible to the simulator. */
+export async function getFailedProductIds(): Promise<Set<string>> {
+  const sb = supabaseAdmin();
+  if (!sb) return new Set();
+  const { data } = await sb
+    .from("test_sessions")
+    .select("product_id")
+    .eq("status", "completed")
+    .eq("verdict", "fail");
+  return new Set(((data as any[]) || []).map((r) => r.product_id).filter(Boolean));
+}
+
 /** Measured figures the Kit Builder consumes in place of a manufacturer claim. */
 export async function getMeasuredByProduct(): Promise<Record<string, { name: string; value: number; unit: string }[]>> {
   const sb = supabaseAdmin();
@@ -335,9 +350,7 @@ export async function getMeasuredByProduct(): Promise<Record<string, { name: str
   const { data: rawSessions } = await sb
     .from("test_sessions")
     .select("id,product_id")
-    .eq("published", true)
-    .eq("status", "completed")
-    .neq("verdict", "fail");
+    .eq("status", "completed");
   const sessions: any[] = (rawSessions as any[]) || [];
   if (!sessions.length) return {};
   const { data: cps } = await sb
