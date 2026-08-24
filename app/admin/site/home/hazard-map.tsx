@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HazardEvent, HazardSource, SourceStatus } from "@/lib/hazards/types";
 import type { MapCountry } from "@/lib/euro-map";
 
@@ -14,6 +14,8 @@ type Props = {
   generatedAt: string;
   byCountry: Record<string, { count: number; worst: number }>;
 };
+
+type View = { x: number; y: number; w: number; h: number };
 
 const SEV_COLOR: Record<string, string> = {
   info: "#6f7f8c",
@@ -38,6 +40,11 @@ const STATE_LABEL: Record<string, string> = {
   "needs-key": "NEEDS KEY",
   "not-built": "NOT BUILT",
 };
+
+/** Deepest magnification, as a multiple of the full-continent view. */
+const MAX_ZOOM = 14;
+const ZOOM_STEP = 1.6;
+const ANIM_MS = 460;
 
 function KindGlyph({ kind, size = 9 }: { kind: string; size?: number }) {
   const s = size;
@@ -66,28 +73,201 @@ export default function HazardMap({
   generatedAt,
   byCountry,
 }: Props) {
-  const available = useMemo(
-    () => new Set(events.map((e) => e.source)),
-    [events]
-  );
+  const FULL: View = useMemo(() => ({ x: 0, y: 0, w: width, h: height }), [width, height]);
+  const AR = width / height;
+
+  const available = useMemo(() => new Set(events.map((e) => e.source)), [events]);
   const [off, setOff] = useState<Set<HazardSource>>(new Set());
   const [severeOnly, setSevereOnly] = useState(false);
   const [country, setCountry] = useState<string | null>(null);
   const [hover, setHover] = useState<{ iso2: string; name: string; x: number; y: number } | null>(null);
   const [active, setActive] = useState<string | null>(null);
+  const [view, setView] = useState<View>(FULL);
 
-  const shown = useMemo(() => {
-    return events.filter((e) => {
-      if (off.has(e.source)) return false;
-      if (severeOnly && e.severity !== "severe" && e.severity !== "elevated") return false;
-      if (country && e.countryIso2 !== country) return false;
-      return true;
-    });
-  }, [events, off, severeOnly, country]);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const animRef = useRef<number | null>(null);
+  const viewRef = useRef<View>(FULL);
+  viewRef.current = view;
+
+  /* ------------------------- viewport maths ------------------------- */
+
+  /** Fit a rect to the map's aspect, clamp the magnification, keep it on-map. */
+  const frame = useCallback(
+    (bx: number, by: number, bw: number, bh: number, pad = 0.28): View => {
+      let w = Math.max(bw, 1) * (1 + pad);
+      let h = Math.max(bh, 1) * (1 + pad);
+      if (w / h > AR) h = w / AR;
+      else w = h * AR;
+
+      const minW = width / MAX_ZOOM;
+      if (w < minW) { w = minW; h = minW / AR; }
+      if (w > width) { w = width; h = height; }
+
+      const cx = bx + bw / 2;
+      const cy = by + bh / 2;
+      return {
+        x: clamp(cx - w / 2, 0, width - w),
+        y: clamp(cy - h / 2, 0, height - h),
+        w,
+        h,
+      };
+    },
+    [AR, width, height]
+  );
+
+  const animateTo = useCallback((target: View) => {
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    const from = viewRef.current;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / ANIM_MS);
+      const e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; // easeInOutCubic
+      setView({
+        x: from.x + (target.x - from.x) * e,
+        y: from.y + (target.y - from.y) * e,
+        w: from.w + (target.w - from.w) * e,
+        h: from.h + (target.h - from.h) * e,
+      });
+      if (p < 1) animRef.current = requestAnimationFrame(step);
+    };
+    animRef.current = requestAnimationFrame(step);
+  }, []);
+
+  useEffect(() => () => { if (animRef.current) cancelAnimationFrame(animRef.current); }, []);
+
+  const resetView = useCallback(() => {
+    setCountry(null);
+    animateTo(FULL);
+  }, [animateTo, FULL]);
+
+  /** Zoom about a fixed point in map coordinates — used by the buttons and the wheel. */
+  const zoomAbout = useCallback(
+    (factor: number, ax: number, ay: number, animate = true) => {
+      const v = viewRef.current;
+      let w = clamp(v.w / factor, width / MAX_ZOOM, width);
+      let h = w / AR;
+      // keep (ax,ay) under the same relative position
+      const rx = (ax - v.x) / v.w;
+      const ry = (ay - v.y) / v.h;
+      const next: View = {
+        x: clamp(ax - rx * w, 0, width - w),
+        y: clamp(ay - ry * h, 0, height - h),
+        w,
+        h,
+      };
+      if (animate) animateTo(next);
+      else setView(next);
+    },
+    [AR, width, height, animateTo]
+  );
+
+  const zoomToCountry = useCallback(
+    (c: MapCountry) => {
+      const [bx, by, bw, bh] = c.bbox;
+      animateTo(frame(bx, by, bw, bh));
+    },
+    [animateTo, frame]
+  );
+
+  const zoomToEvent = useCallback(
+    (e: HazardEvent) => {
+      if (!e.xy) return;
+      const w = width / 7;
+      animateTo(frame(e.xy.x - w / 2, e.xy.y - w / AR / 2, w, w / AR, 0));
+    },
+    [animateTo, frame, width, AR]
+  );
+
+  /* client point -> map coordinate */
+  const toMap = useCallback((clientX: number, clientY: number): [number, number] => {
+    const el = svgRef.current;
+    if (!el) return [width / 2, height / 2];
+    const r = el.getBoundingClientRect();
+    const v = viewRef.current;
+    return [v.x + ((clientX - r.left) / r.width) * v.w, v.y + ((clientY - r.top) / r.height) * v.h];
+  }, [width, height]);
+
+  /* ------------------------- wheel + drag ------------------------- */
+
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheel = (ev: WheelEvent) => {
+      ev.preventDefault();
+      const [ax, ay] = toMap(ev.clientX, ev.clientY);
+      zoomAbout(ev.deltaY < 0 ? 1.18 : 1 / 1.18, ax, ay, false);
+    };
+    // passive:false so preventDefault actually stops the page scrolling
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [toMap, zoomAbout]);
+
+  const drag = useRef<{ id: number; sx: number; sy: number; vx: number; vy: number; moved: boolean } | null>(null);
+
+  function onPointerDown(ev: React.PointerEvent<SVGSVGElement>) {
+    if (ev.button !== 0) return;
+    const v = viewRef.current;
+    drag.current = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, vx: v.x, vy: v.y, moved: false };
+    (ev.currentTarget as any).setPointerCapture?.(ev.pointerId);
+  }
+
+  function onPointerMove(ev: React.PointerEvent<SVGSVGElement>) {
+    const d = drag.current;
+    if (!d || d.id !== ev.pointerId) return;
+    const el = svgRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const v = viewRef.current;
+    const dx = ((ev.clientX - d.sx) / r.width) * v.w;
+    const dy = ((ev.clientY - d.sy) / r.height) * v.h;
+    if (Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 4) d.moved = true;
+    if (!d.moved) return;
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    setView({ x: clamp(d.vx - dx, 0, width - v.w), y: clamp(d.vy - dy, 0, height - v.h), w: v.w, h: v.h });
+  }
+
+  function onPointerUp(ev: React.PointerEvent<SVGSVGElement>) {
+    const d = drag.current;
+    drag.current = null;
+    (ev.currentTarget as any).releasePointerCapture?.(ev.pointerId);
+    if (d?.moved) return; // it was a pan, not a click
+  }
+
+  function handleCountry(c: MapCountry) {
+    if (drag.current?.moved) return;
+    if (country === c.iso2) {
+      resetView();
+      return;
+    }
+    setCountry(c.iso2);
+    zoomToCountry(c);
+  }
+
+  /* Esc always gets you back to the whole continent. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") resetView();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [resetView]);
+
+  /* ------------------------- filtering ------------------------- */
+
+  const shown = useMemo(
+    () =>
+      events.filter((e) => {
+        if (off.has(e.source)) return false;
+        if (severeOnly && e.severity !== "severe" && e.severity !== "elevated") return false;
+        if (country && e.countryIso2 !== country) return false;
+        return true;
+      }),
+    [events, off, severeOnly, country]
+  );
 
   const plotted = useMemo(() => shown.filter((e) => e.xy), [shown]);
-
   const countryName = country ? countries.find((c) => c.iso2 === country)?.name ?? country : null;
+  const worstNow = shown[0];
 
   function toggle(src: HazardSource) {
     setOff((prev) => {
@@ -98,7 +278,10 @@ export default function HazardMap({
     });
   }
 
-  const worstNow = shown[0];
+  /* Screen-constant sizing: geometry drawn in map units shrinks as we zoom in. */
+  const k = view.w / width;            // 1 at full extent, smaller when zoomed in
+  const zoom = width / view.w;         // magnification, for the readout
+  const labelCut = 2600 * k * k;       // reveal smaller countries as you go deeper
 
   return (
     <div className="sf-hz">
@@ -151,7 +334,7 @@ export default function HazardMap({
           Disruptive only
         </button>
         {country && (
-          <button type="button" className="sf-hz-layer alt on" onClick={() => setCountry(null)}>
+          <button type="button" className="sf-hz-layer alt on" onClick={resetView}>
             {countryName} ✕
           </button>
         )}
@@ -160,11 +343,20 @@ export default function HazardMap({
       <div className="sf-hz-body">
         <div className="sf-hz-mapwrap">
           <svg
-            viewBox={`0 0 ${width} ${height}`}
-            className="sf-hz-svg"
+            ref={svgRef}
+            viewBox={`${r2(view.x)} ${r2(view.y)} ${r2(view.w)} ${r2(view.h)}`}
+            className={`sf-hz-svg${zoom > 1.01 ? " zoomed" : ""}`}
             role="img"
-            aria-label="Live hazard map of Europe"
+            aria-label="Live hazard map of Europe. Scroll to zoom, drag to pan, click a country to zoom to it."
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
             onMouseLeave={() => setHover(null)}
+            onDoubleClick={(e) => {
+              const [ax, ay] = toMap(e.clientX, e.clientY);
+              zoomAbout(ZOOM_STEP, ax, ay);
+            }}
           >
             <defs>
               <radialGradient id="hz-sea" cx="50%" cy="42%" r="72%">
@@ -172,7 +364,7 @@ export default function HazardMap({
                 <stop offset="100%" stopColor="#080d13" />
               </radialGradient>
             </defs>
-            <rect width={width} height={height} fill="url(#hz-sea)" />
+            <rect x={0} y={0} width={width} height={height} fill="url(#hz-sea)" />
 
             {countries.map((c) => {
               const agg = byCountry[c.iso2];
@@ -183,58 +375,99 @@ export default function HazardMap({
                 <path
                   key={c.iso2}
                   d={c.d}
+                  vectorEffect="non-scaling-stroke"
                   className={`sf-hz-country${c.eu ? " eu" : " ctx"}${selected ? " sel" : ""}`}
-                  style={
-                    worst >= 1
-                      ? { fill: hexA(SEV_COLOR[sevKey], c.eu ? 0.17 : 0.12) }
-                      : undefined
-                  }
-                  onMouseEnter={() =>
-                    setHover({ iso2: c.iso2, name: c.name, x: c.labelX, y: c.labelY })
-                  }
-                  onClick={() => setCountry((prev) => (prev === c.iso2 ? null : c.iso2))}
+                  style={worst >= 1 ? { fill: hexA(SEV_COLOR[sevKey], c.eu ? 0.17 : 0.12) } : undefined}
+                  onMouseEnter={() => setHover({ iso2: c.iso2, name: c.name, x: c.labelX, y: c.labelY })}
+                  onClick={() => handleCountry(c)}
                 />
               );
             })}
 
-            {/* Country labels for the larger EU markets only — the map has to stay readable. */}
             {countries
-              .filter((c) => c.eu && c.area > 2600 && c.labelX > -900)
+              .filter((c) => c.area > labelCut && c.labelX > -900)
               .map((c) => (
-                <text key={`l-${c.iso2}`} x={c.labelX} y={c.labelY} className="sf-hz-clabel">
+                <text
+                  key={`l-${c.iso2}`}
+                  x={c.labelX}
+                  y={c.labelY}
+                  className="sf-hz-clabel"
+                  style={{ fontSize: 11 * k }}
+                >
                   {c.iso2}
                 </text>
               ))}
 
             {plotted.map((e) => {
               const isActive = active === e.id;
+              const big = e.severity === "severe";
               return (
                 <g
                   key={e.id}
-                  transform={`translate(${e.xy!.x},${e.xy!.y})`}
+                  transform={`translate(${e.xy!.x},${e.xy!.y}) scale(${k})`}
                   className={`sf-hz-marker sev-${e.severity}${isActive ? " active" : ""}`}
                   style={{ color: SEV_COLOR[e.severity] }}
                   onMouseEnter={() => setActive(e.id)}
                   onMouseLeave={() => setActive(null)}
                 >
-                  {(e.severity === "severe" || e.severity === "elevated") && (
-                    <circle r={e.severity === "severe" ? 15 : 11} className="sf-hz-halo" />
+                  {(big || e.severity === "elevated") && (
+                    <circle r={big ? 15 : 11} className="sf-hz-halo" />
                   )}
-                  <circle r={e.severity === "severe" ? 8.5 : 7} className="sf-hz-disc" />
+                  <circle r={big ? 8.5 : 7} className="sf-hz-disc" />
                   <g className="sf-hz-glyph">
-                    <KindGlyph kind={e.kind} size={e.severity === "severe" ? 5.5 : 4.6} />
+                    <KindGlyph kind={e.kind} size={big ? 5.5 : 4.6} />
                   </g>
                 </g>
               );
             })}
 
             {hover && hover.x > -900 && (
-              <g transform={`translate(${clamp(hover.x, 70, width - 70)},${clamp(hover.y - 22, 20, height - 20)})`} className="sf-hz-tip">
+              <g
+                transform={`translate(${clamp(hover.x, view.x + 70 * k, view.x + view.w - 70 * k)},${clamp(
+                  hover.y - 22 * k,
+                  view.y + 20 * k,
+                  view.y + view.h - 20 * k
+                )}) scale(${k})`}
+                className="sf-hz-tip"
+              >
                 <rect x={-64} y={-15} width={128} height={22} rx={4} />
                 <text y={0}>{hover.name}</text>
               </g>
             )}
           </svg>
+
+          <div className="sf-hz-zoom" role="group" aria-label="Map zoom">
+            <button
+              type="button"
+              onClick={() => zoomAbout(ZOOM_STEP, view.x + view.w / 2, view.y + view.h / 2)}
+              disabled={zoom >= MAX_ZOOM - 0.01}
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              onClick={() => zoomAbout(1 / ZOOM_STEP, view.x + view.w / 2, view.y + view.h / 2)}
+              disabled={zoom <= 1.01}
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="sf-hz-zoomreset"
+              onClick={resetView}
+              disabled={zoom <= 1.01 && !country}
+              aria-label="Reset to the whole continent"
+            >
+              ⤢
+            </button>
+            <span className="sf-hz-zoomlevel">{zoom < 1.05 ? "1×" : `${zoom.toFixed(1)}×`}</span>
+          </div>
+
+          <div className="sf-hz-hint">
+            Click a country to zoom to it · scroll or double-click to zoom · drag to pan · Esc to reset
+          </div>
 
           <div className="sf-hz-legend">
             {(["severe", "elevated", "watch", "info"] as const).map((s) => (
@@ -257,14 +490,21 @@ export default function HazardMap({
               </div>
               <div className="sf-hz-leadtitle">{worstNow.title}</div>
               <p>{worstNow.summary}</p>
-              <Link
-                className="sf-hz-ask"
-                href={`/admin/site/jimmy?q=${encodeURIComponent(
-                  `There is a ${worstNow.kind} event — ${worstNow.title}. What should my household do to be ready for something like this?`
-                )}`}
-              >
-                Ask Jimmy what this means for my household →
-              </Link>
+              <div className="sf-hz-leadactions">
+                <Link
+                  className="sf-hz-ask"
+                  href={`/admin/site/jimmy?q=${encodeURIComponent(
+                    `There is a ${worstNow.kind} event — ${worstNow.title}. What should my household do to be ready for something like this?`
+                  )}`}
+                >
+                  Ask Jimmy what this means for my household →
+                </Link>
+                {worstNow.xy && (
+                  <button type="button" className="sf-hz-locate" onClick={() => zoomToEvent(worstNow)}>
+                    Show on map
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -276,9 +516,11 @@ export default function HazardMap({
             {shown.slice(0, 40).map((e) => (
               <li
                 key={e.id}
-                className={`sf-hz-item${active === e.id ? " active" : ""}`}
+                className={`sf-hz-item${active === e.id ? " active" : ""}${e.xy ? " clickable" : ""}`}
                 onMouseEnter={() => setActive(e.id)}
                 onMouseLeave={() => setActive(null)}
+                onClick={() => zoomToEvent(e)}
+                title={e.xy ? "Zoom to this event" : undefined}
               >
                 <span className="sf-hz-itembar" style={{ background: SEV_COLOR[e.severity] }} />
                 <div className="sf-hz-itembody">
@@ -343,6 +585,10 @@ function hexA(hex: string, a: number): string {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+function r2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 function timeAgo(iso: string): string {

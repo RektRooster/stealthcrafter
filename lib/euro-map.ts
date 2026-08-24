@@ -146,6 +146,8 @@ export type MapCountry = {
   labelY: number;
   area: number;
   eu: boolean;
+  /** Projected bounding box [x, y, w, h] — what the client zooms to. */
+  bbox: [number, number, number, number];
 };
 
 export type EuroMapData = {
@@ -218,14 +220,20 @@ export function getEuroMapData(): EuroMapData {
   const countries: MapCountry[] = feats.map((f) => {
     const geo = { type: "Feature" as const, properties: {}, geometry: f.clipped };
     const [labelX, labelY] = path.centroid(geo as any);
+    const b = path.bounds(geo as any);
+    const ok = b.every((pair) => pair.every((n) => Number.isFinite(n)));
+    const r1 = (n: number) => Math.round(n * 10) / 10;
     return {
       iso2: f.iso2,
       name: f.name,
       d: path(geo as any) || "",
-      labelX: Number.isFinite(labelX) ? Math.round(labelX * 10) / 10 : -999,
-      labelY: Number.isFinite(labelY) ? Math.round(labelY * 10) / 10 : -999,
+      labelX: Number.isFinite(labelX) ? r1(labelX) : -999,
+      labelY: Number.isFinite(labelY) ? r1(labelY) : -999,
       area: Math.round(path.area(geo as any)),
       eu: f.eu,
+      bbox: ok
+        ? [r1(b[0][0]), r1(b[0][1]), r1(b[1][0] - b[0][0]), r1(b[1][1] - b[0][1])]
+        : [0, 0, EURO_MAP_WIDTH, EURO_MAP_HEIGHT],
     };
   });
   countries.sort((a, b) => Number(a.eu) - Number(b.eu)); // neighbours painted first
