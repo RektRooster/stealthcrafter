@@ -49,7 +49,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               <div className="sf-pdpthumbs">
                 {p.imagesAll.slice(1, 6).map((u) => (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img key={u} src={u} alt="" loading="lazy" />
+                  <img key={u} src={u} alt="" decoding="async" />
                 ))}
               </div>
             )}

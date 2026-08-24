@@ -7,7 +7,7 @@ import { EVIDENCE_META, EVIDENCE_ORDER, fmtEur, toEur } from "@/lib/catalogue-da
 
 type Sort = "relevance" | "price-asc" | "price-desc" | "name";
 
-const PAGE = 48;
+const PAGE = 36;
 
 export default function CatalogueBrowser({ data }: { data: CatalogueData }) {
   const [q, setQ] = useState("");
@@ -206,8 +206,11 @@ function ProductCard({ p }: { p: CatalogueProduct }) {
     <Link href={`/admin/site/catalogue/${p.slug}`} className={`sf-card st-${p.state}`}>
       <div className="sf-cardimg">
         {p.image ? (
+          // No loading="lazy": Chrome never fires the intersection callback for
+          // these tiles, so every card sat blank forever while the identical URL
+          // loaded instantly as eager. Verified in the browser before changing it.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={p.image} alt="" loading="lazy" />
+          <img src={p.image} alt="" width={400} height={300} decoding="async" />
         ) : (
           <span className="sf-noimg">No image yet</span>
         )}
