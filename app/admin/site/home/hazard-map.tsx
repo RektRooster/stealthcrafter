@@ -202,39 +202,67 @@ export default function HazardMap({
     return () => el.removeEventListener("wheel", onWheel);
   }, [toMap, zoomAbout]);
 
-  const drag = useRef<{ id: number; sx: number; sy: number; vx: number; vy: number; moved: boolean } | null>(null);
+  /* Panning deliberately does NOT use setPointerCapture: capturing retargets
+     the subsequent click to the <svg>, which silently swallowed every
+     click-a-country-to-zoom. Window listeners give the same drag-outside
+     behaviour without stealing the click. */
+  const dragRef = useRef<{ sx: number; sy: number; vx: number; vy: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+
+  const onWinMove = useCallback(
+    (ev: PointerEvent) => {
+      const d = dragRef.current;
+      const el = svgRef.current;
+      if (!d || !el) return;
+      const dxPx = ev.clientX - d.sx;
+      const dyPx = ev.clientY - d.sy;
+      if (!d.moved && Math.abs(dxPx) + Math.abs(dyPx) > 4) d.moved = true;
+      if (!d.moved) return;
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+      const r = el.getBoundingClientRect();
+      const v = viewRef.current;
+      setView({
+        x: clamp(d.vx - (dxPx / r.width) * v.w, 0, width - v.w),
+        y: clamp(d.vy - (dyPx / r.height) * v.h, 0, height - v.h),
+        w: v.w,
+        h: v.h,
+      });
+    },
+    [width, height]
+  );
+
+  const onWinUp = useCallback(() => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    window.removeEventListener("pointermove", onWinMove);
+    if (d?.moved) {
+      // The click that follows this pointerup belongs to the pan, not to the
+      // country underneath the cursor.
+      suppressClick.current = true;
+      window.setTimeout(() => {
+        suppressClick.current = false;
+      }, 0);
+    }
+  }, [onWinMove]);
+
+  useEffect(
+    () => () => {
+      window.removeEventListener("pointermove", onWinMove);
+      window.removeEventListener("pointerup", onWinUp);
+    },
+    [onWinMove, onWinUp]
+  );
 
   function onPointerDown(ev: React.PointerEvent<SVGSVGElement>) {
     if (ev.button !== 0) return;
     const v = viewRef.current;
-    drag.current = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, vx: v.x, vy: v.y, moved: false };
-    (ev.currentTarget as any).setPointerCapture?.(ev.pointerId);
-  }
-
-  function onPointerMove(ev: React.PointerEvent<SVGSVGElement>) {
-    const d = drag.current;
-    if (!d || d.id !== ev.pointerId) return;
-    const el = svgRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const v = viewRef.current;
-    const dx = ((ev.clientX - d.sx) / r.width) * v.w;
-    const dy = ((ev.clientY - d.sy) / r.height) * v.h;
-    if (Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 4) d.moved = true;
-    if (!d.moved) return;
-    if (animRef.current) cancelAnimationFrame(animRef.current);
-    setView({ x: clamp(d.vx - dx, 0, width - v.w), y: clamp(d.vy - dy, 0, height - v.h), w: v.w, h: v.h });
-  }
-
-  function onPointerUp(ev: React.PointerEvent<SVGSVGElement>) {
-    const d = drag.current;
-    drag.current = null;
-    (ev.currentTarget as any).releasePointerCapture?.(ev.pointerId);
-    if (d?.moved) return; // it was a pan, not a click
+    dragRef.current = { sx: ev.clientX, sy: ev.clientY, vx: v.x, vy: v.y, moved: false };
+    window.addEventListener("pointermove", onWinMove);
+    window.addEventListener("pointerup", onWinUp, { once: true });
   }
 
   function handleCountry(c: MapCountry) {
-    if (drag.current?.moved) return;
+    if (suppressClick.current) return;
     if (country === c.iso2) {
       resetView();
       return;
@@ -349,9 +377,6 @@ export default function HazardMap({
             role="img"
             aria-label="Live hazard map of Europe. Scroll to zoom, drag to pan, click a country to zoom to it."
             onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
             onMouseLeave={() => setHover(null)}
             onDoubleClick={(e) => {
               const [ax, ay] = toMap(e.clientX, e.clientY);
