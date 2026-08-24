@@ -94,7 +94,12 @@ export async function fetchEffis(): Promise<{ events: HazardEvent[]; status: Sou
     if (Number.isFinite(ha)) {
       severity = ha >= 2000 ? "severe" : ha >= 500 ? "elevated" : ha >= 100 ? "watch" : "info";
     }
-    if (!ongoing && severity !== "info") severity = down(severity);
+    // EFFIS maps burnt area; it does not say whether a fire is still burning.
+    // A fire first recorded more than three days ago is very likely being
+    // managed or already out, so it is stepped down rather than sitting at the
+    // top of the page as something to act on today.
+    const stale = Date.now() - started.getTime() > 72 * 3600e3;
+    if ((!ongoing || stale) && severity !== "info") severity = down(severity);
 
     const iso2 = clean(String(p.COUNTRY || "")).toUpperCase() || countryOf(lon, lat) || null;
     const place = [clean(String(p.COMMUNE || "")), clean(String(p.PROVINCE || ""))]
@@ -128,7 +133,9 @@ export async function fetchEffis(): Promise<{ events: HazardEvent[]; status: Sou
   }
 
   events.sort((a, b) => (b.magnitude ?? 0) - (a.magnitude ?? 0));
-  const top = events.slice(0, 200);
+  const CAP = 200;
+  const top = events.slice(0, CAP);
+  const trimmed = Math.max(0, events.length - CAP);
 
   return {
     events: top,
@@ -136,7 +143,9 @@ export async function fetchEffis(): Promise<{ events: HazardEvent[]; status: Sou
       ...base,
       state: top.length ? "live" : feats.length ? "empty" : "empty",
       detail: top.length
-        ? `${top.length} fires mapped across Europe in the last ${WINDOW_DAYS} days (layer ${LAYER}).`
+        ? `${top.length} fires mapped across Europe in the last ${WINDOW_DAYS} days` +
+          (trimmed ? `, largest first — ${trimmed} smaller fires not shown` : "") +
+          ` (layer ${LAYER}).`
         : `Connected to ${LAYER}, but no European fires recorded in the last ${WINDOW_DAYS} days.`,
       fetchedAt: new Date().toISOString(),
       count: top.length,

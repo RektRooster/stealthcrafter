@@ -3132,7 +3132,7 @@ table.cc-comp-flagtable { min-width: 760px; }
 /* Brass on ink, same canon as the rest of the sf- tier.                 */
 /* ==================================================================== */
 
-.sf-wide { max-width: 1440px; margin: 0 auto; padding: 0 24px 8px; }
+.sf-wide { max-width: 1440px; margin: 0 auto; padding: 0 24px 8px; min-width: 0; overflow-x: hidden; }
 
 /* ---- Jimmy starter ------------------------------------------------- */
 .sf-start { max-width: 720px; margin: 26px auto 0; }
@@ -3182,6 +3182,7 @@ table.cc-comp-flagtable { min-width: 760px; }
 
 /* ---- Hazard map ---------------------------------------------------- */
 .sf-hz {
+  min-width: 0;
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 10px;
   background: linear-gradient(180deg, rgba(255,255,255,.022), rgba(255,255,255,.006));
@@ -3284,7 +3285,7 @@ table.cc-comp-flagtable { min-width: 760px; }
 .sf-hz-leadtag {
   font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; font-weight: 700;
 }
-.sf-hz-leadtitle { margin-top: 6px; font-size: 15px; color: #ece7dd; font-weight: 600; }
+.sf-hz-leadtitle { margin-top: 6px; font-size: 15px; color: #ece7dd; font-weight: 600; overflow-wrap: anywhere; }
 .sf-hz-lead p { margin: 7px 0 0; font-size: 13px; color: #97a1ab; line-height: 1.6; }
 .sf-hz-ask {
   display: inline-block; margin-top: 11px; font-size: 12.5px;
@@ -3299,7 +3300,7 @@ table.cc-comp-flagtable { min-width: 760px; }
 }
 .sf-hz-list {
   list-style: none; margin: 0; padding: 0;
-  max-height: 560px; overflow-y: auto;
+  max-height: 560px; overflow-y: auto; overflow-x: hidden;
   border: 1px solid rgba(255,255,255,.07); border-radius: 7px;
 }
 .sf-hz-list::-webkit-scrollbar { width: 8px; }
@@ -3312,14 +3313,18 @@ table.cc-comp-flagtable { min-width: 760px; }
 .sf-hz-item.active { background: rgba(198,161,91,.06); }
 .sf-hz-itembar { flex: 0 0 3px; }
 .sf-hz-itembody { padding: 11px 13px; min-width: 0; }
-.sf-hz-itemtop { display: flex; gap: 8px; align-items: baseline; }
-.sf-hz-itemtop strong { font-size: 13px; color: #e2ddd4; font-weight: 600; }
+.sf-hz-itemtop { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.sf-hz-itemtop strong {
+  font-size: 13px; color: #e2ddd4; font-weight: 600;
+  min-width: 0; overflow-wrap: anywhere;
+}
 .sf-hz-iso {
   font-size: 10px; letter-spacing: .08em; color: #8b949e;
   border: 1px solid rgba(255,255,255,.14); border-radius: 3px; padding: 1px 5px; flex: 0 0 auto;
 }
 .sf-hz-item p {
   margin: 5px 0 0; font-size: 12px; color: #8b949e; line-height: 1.55;
+  overflow-wrap: anywhere;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 .sf-hz-itemmeta {
