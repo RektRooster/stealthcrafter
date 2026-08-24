@@ -432,7 +432,11 @@ export default function KitBuilder({ catalogue, liveHints }: Props) {
                       {i.category}
                       {i.weightKg ? ` · ${(i.weightKg * i.qty).toFixed(2)} kg` : ""}
                       {i.shelfMonths ? ` · ${i.shelfMonths} mo shelf life` : ""}
-                      {i.attrs.basis === "typical" ? " · capacity estimated" : ""}
+                      {(i as CatItem).measured
+                        ? " · measured by us"
+                        : i.attrs.basis === "typical"
+                        ? " · capacity estimated"
+                        : ""}
                     </span>
                   </div>
                   <span className="sf-kitprice">{eur((i.price ?? 0) * i.qty)}</span>

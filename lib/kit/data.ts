@@ -22,31 +22,45 @@ export type KitCatalogue = {
 };
 
 /* Where we have tested a product, our measured number replaces the
-   manufacturer's claim in the simulation. That is the whole point of running a
-   protocol: the Kit Builder computes on what we saw, not what the box says. */
+   manufacturer's claim in the simulation. That is the point of running a
+   protocol: the Kit Builder computes on what we saw, not what the box says.
+
+   Only claims the measurement genuinely settles are applied. Measured flow
+   rate, for instance, does NOT reduce a filter's element life — but a filter
+   that delivered nothing on untreated water treats nothing, and that is a real
+   and important correction. */
 function applyMeasured(
   attrs: any,
-  rows: { name: string; value: number; unit: string }[] | undefined
+  rows: { name: string; value: number; unit: string }[] | undefined,
+  item: { weightKg: number | null }
 ): boolean {
   if (!rows?.length) return false;
   let changed = false;
   for (const r of rows) {
     const n = r.name.toLowerCase();
     const u = (r.unit || "").toLowerCase();
+
     if (u === "ml/min" && /dirty/.test(n)) {
-      // Sustained dirty-water throughput is the honest planning figure: cap the
-      // treatable volume at what the filter can actually deliver in a day.
-      attrs.waterTreatL = Math.min(attrs.waterTreatL ?? Infinity, Math.round((r.value * 60 * 8) / 1000) * 30);
-      changed = true;
+      // A filter that could not pass untreated water treats nothing, whatever
+      // its rated element life says.
+      if (r.value <= 0) {
+        attrs.waterTreatL = 0;
+        changed = true;
+      }
     } else if (u === "kcal") {
       attrs.kcal = r.value;
       changed = true;
     } else if (u === "lm") {
-      // Keep the tested runtime, swap in the measured output.
-      const hours = attrs.lumenHours && r.value ? attrs.lumenHours / (attrs.lumenHours / r.value) : null;
-      attrs.lumenHours = r.value * 12;
+      // Keep the assumed runtime, swap in the output we actually measured.
+      const hours = attrs.lumenHours && attrs.lumenHours > 0 ? attrs.lumenHours / 250 : 12;
+      attrs.lumenHours = Math.round(r.value * hours);
       changed = true;
-      void hours;
+    } else if (u === "g") {
+      item.weightKg = r.value / 1000;
+      changed = true;
+    } else if (u === "kg") {
+      item.weightKg = r.value;
+      changed = true;
     }
   }
   return changed;
@@ -87,7 +101,8 @@ export async function getKitCatalogue(): Promise<KitCatalogue> {
         weight: r.weight,
         powerSource: r.power_source,
       });
-      const measured = applyMeasured(attrs, (measuredByProduct as any)[r.id]);
+      const weightBox = { weightKg: parseWeightKg(r.weight) };
+      const measured = applyMeasured(attrs, (measuredByProduct as any)[r.id], weightBox);
       const priceRaw = r.selling_price === null ? null : Number(r.selling_price);
       const price =
         priceRaw === null
@@ -103,7 +118,7 @@ export async function getKitCatalogue(): Promise<KitCatalogue> {
         category,
         pillar: r.pillar || null,
         price,
-        weightKg: parseWeightKg(r.weight),
+        weightKg: weightBox.weightKg,
         shelfMonths: parseShelfLifeMonths(r.shelf_life),
         attrs,
         qty: 1,
