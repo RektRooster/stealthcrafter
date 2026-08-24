@@ -1,19 +1,33 @@
-import SfPlaceholder from "../sf-placeholder";
+import { getPortalData } from "@/lib/portal-data";
+import Portal from "./portal";
 
-export default function StorefrontDashboardPage() {
-  return (
-    <SfPlaceholder
-      title="My Dashboard"
-      description={
-        <>
-          At launch this is the family&apos;s preparedness headquarters, kept
-          deliberately lean: an equipment register, maintenance and expiry
-          reminders, and the household preparedness score. Richer features —
-          manuals, training progress, Jimmy conversation history and annual
-          review status — are added in later phases.
-        </>
-      }
-      feed="Fed by SC 03 — Jimmy (Preparedness Profile and score roll-up) and SC 05 — Platform (accounts and data spine)."
-    />
-  );
+export const dynamic = "force-dynamic";
+
+// STOREFRONT PREVIEW — the customer portal.
+// Behind the /admin gate; becomes the member area once auth lands. The household
+// switcher stands in for "logged in as" until then.
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ h?: string; s?: string }>;
+}) {
+  const { h, s } = await searchParams;
+  const data = await getPortalData(h, s);
+
+  if (!data.configured || !data.household) {
+    return (
+      <main className="sf-page">
+        <div className="sf-inner">
+          <div className="cc-notice">
+            <strong>The portal is offline.</strong>{" "}
+            {data.configured
+              ? "No household profiles exist yet — create one in the Jimmy console."
+              : "Supabase is not configured."}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return <Portal data={data} />;
 }
