@@ -5,6 +5,8 @@
 
 import { useId } from "react";
 
+const safeId = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "");
+
 export const PILLAR_COLOR: Record<string, string> = {
   Water: "#5fa8d3",
   Food: "#8fbf6a",
@@ -20,7 +22,7 @@ export const PILLAR_COLOR: Record<string, string> = {
 export type RadarPoint = { pillar: string; score: number | null; target: number | null; critical: boolean };
 
 export function PillarRadar({ points, size = 340 }: { points: RadarPoint[]; size?: number }) {
-  const uid = useId().replace(/:/g, "");
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const cx = size / 2;
   const cy = size / 2 + 6;
   const r = size * 0.33;
@@ -129,7 +131,7 @@ export function ReadinessDial({
   label: string;
   size?: number;
 }) {
-  const uid = useId().replace(/:/g, "");
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const cx = size / 2;
   const cy = size / 2;
   const r = size * 0.38;
@@ -227,7 +229,7 @@ export function DepletionTimeline({
   scenarioHours: number;
   width?: number;
 }) {
-  const uid = useId().replace(/:/g, "");
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const rowH = 34;
   const padL = 86;
   const padR = 54;
@@ -241,7 +243,7 @@ export function DepletionTimeline({
     <svg viewBox={`0 0 ${width} ${height}`} className="sf-depl" role="img" aria-label="How long each pillar lasts">
       <defs>
         {rows.map((r) => (
-          <linearGradient key={r.pillar} id={`dl-${uid}-${r.pillar}`} x1="0" x2="1">
+          <linearGradient key={r.pillar} id={`dl-${uid}-${safeId(r.pillar)}`} x1="0" x2="1">
             <stop offset="0%" stopColor={PILLAR_COLOR[r.pillar] ?? "#c6a15b"} stopOpacity="0.95" />
             <stop offset="82%" stopColor={PILLAR_COLOR[r.pillar] ?? "#c6a15b"} stopOpacity="0.55" />
             <stop offset="100%" stopColor={PILLAR_COLOR[r.pillar] ?? "#c6a15b"} stopOpacity="0" />
@@ -281,7 +283,7 @@ export function DepletionTimeline({
               y1={y}
               x2={end}
               y2={y}
-              stroke={`url(#dl-${uid}-${r.pillar})`}
+              stroke={`url(#dl-${uid}-${safeId(r.pillar)})`}
               className="sf-deplline"
             />
             {short ? (
@@ -321,7 +323,7 @@ export function DecayCurve({
   width?: number;
   height?: number;
 }) {
-  const uid = useId().replace(/:/g, "");
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   if (!points.length) return null;
   const padB = 20;
   const padT = 8;
