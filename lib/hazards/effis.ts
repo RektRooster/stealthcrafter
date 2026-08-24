@@ -24,7 +24,7 @@ const BASE = "https://maps.effis.emergency.copernicus.eu/effis";
 
 const LAYERS = process.env.EFFIS_HOTSPOT_LAYER
   ? [process.env.EFFIS_HOTSPOT_LAYER]
-  : ["ms:viirs.hs", "ms:modis.hs"];
+  : ["ms:modis.hs", "ms:viirs.hs"];
 
 const FRAME = { minlon: -26, maxlon: 46, minlat: 32, maxlat: 72 };
 const WINDOW_DAYS = 3;
@@ -36,22 +36,20 @@ function sinceLiteral(days: number): string {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} 00:00:00`;
 }
 
-/* Date + bounding-box predicate. lat and lon are exposed as their own
-   properties, which sidesteps the WFS 1.1 EPSG:4326 axis-order trap that a
-   <BBOX> operator would otherwise hit. */
+/* Date predicate ONLY.
+   The first attempt also constrained lat/lon through <PropertyIsBetween> and
+   returned zero features: those attributes come back as strings, so the
+   comparison ran lexically ("9.5" > "46") and excluded almost all of Europe.
+   The frame is therefore applied here, after parsing, where it is numeric. */
 function buildFilter(): string {
-  const between = (prop: string, lo: number, hi: number) =>
-    `<PropertyIsBetween><PropertyName>${prop}</PropertyName>` +
-    `<LowerBoundary><Literal>${lo}</Literal></LowerBoundary>` +
-    `<UpperBoundary><Literal>${hi}</Literal></UpperBoundary></PropertyIsBetween>`;
   return (
-    `<Filter><And>` +
-    `<PropertyIsGreaterThan><PropertyName>acq_at</PropertyName>` +
-    `<Literal>${sinceLiteral(WINDOW_DAYS)}</Literal></PropertyIsGreaterThan>` +
-    between("lat", FRAME.minlat, FRAME.maxlat) +
-    between("lon", FRAME.minlon, FRAME.maxlon) +
-    `</And></Filter>`
+    `<Filter><PropertyIsGreaterThan><PropertyName>acq_at</PropertyName>` +
+    `<Literal>${sinceLiteral(WINDOW_DAYS)}</Literal></PropertyIsGreaterThan></Filter>`
   );
+}
+
+function inFrame(lon: number, lat: number): boolean {
+  return lon >= FRAME.minlon && lon <= FRAME.maxlon && lat >= FRAME.minlat && lat <= FRAME.maxlat;
 }
 
 export async function fetchEffis(): Promise<{ events: HazardEvent[]; status: SourceStatus }> {
@@ -73,7 +71,7 @@ export async function fetchEffis(): Promise<{ events: HazardEvent[]; status: Sou
   for (const layer of LAYERS) {
     const url =
       `${BASE}?service=WFS&version=1.1.0&request=getfeature` +
-      `&typename=${encodeURIComponent(layer)}&outputformat=geojson&maxfeatures=1500` +
+      `&typename=${encodeURIComponent(layer)}&outputformat=geojson&maxfeatures=4000` +
       `&filter=${encodeURIComponent(buildFilter())}`;
 
     const r = await safeFetch(url, { revalidate: 1800, timeoutMs: 14000 });
@@ -113,7 +111,12 @@ export async function fetchEffis(): Promise<{ events: HazardEvent[]; status: Sou
       continue;
     }
 
-    const events = cluster(mapHotspots(fresh));
+    const mapped = mapHotspots(fresh);
+    if (!mapped.length) {
+      notes.push(`${layer}: ${fresh.length} recent detections worldwide, none inside the European frame`);
+      continue;
+    }
+    const events = cluster(mapped);
     return {
       events,
       status: {
@@ -148,6 +151,7 @@ function mapHotspots(feats: any[]): HazardEvent[] {
     const lon = Number(Array.isArray(c) ? c[0] : p.lon);
     const lat = Number(Array.isArray(c) ? c[1] : p.lat);
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+    if (!inFrame(lon, lat)) continue;
 
     const conf = Number(p.confidence);
     const frp = Number(p.frp); // fire radiative power, MW

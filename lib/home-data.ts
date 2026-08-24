@@ -26,7 +26,9 @@ export type HomeData = {
 
 async function count(sb: any, table: string, filter?: (q: any) => any): Promise<number | null> {
   try {
-    let q = sb.from(table).select("id", { head: true, count: "exact" });
+    // Not every table keys on "id" (country_markets keys on iso2), so count
+    // over "*" rather than assuming a column name.
+    let q = sb.from(table).select("*", { head: true, count: "exact" });
     if (filter) q = filter(q);
     const { count: c, error } = await q;
     if (error) return null;
