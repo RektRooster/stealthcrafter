@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { OwnedItem, PortalData } from "@/lib/portal-data";
 import { ScoreRing } from "../tested/report-visuals";
+import { DecayCurve, DepletionTimeline, PillarRadar, ReadinessDial } from "./viz";
+import type { DepletionRow, RadarPoint } from "./viz";
 
 const PILLAR_COLOR: Record<string, string> = {
   Water: "#5fa8d3",
@@ -11,6 +13,16 @@ const PILLAR_COLOR: Record<string, string> = {
   Fire: "#f5913c",
   Shelter: "#c9a9d3",
   Medical: "#e0655f",
+};
+
+/* The simulator's pillar names to SC 03's five. "heat" is SC 03's "Fire". */
+const SIM_TO_PILLAR: Record<string, string> = {
+  water: "Water",
+  food: "Food",
+  heat: "Fire",
+  medical: "Medical",
+  power: "Power",
+  light: "Light",
 };
 
 const KIT_LABEL: Record<string, string> = {
@@ -52,6 +64,23 @@ export default function Portal({ data }: { data: PortalData }) {
     ? Math.round(data.assessments.reduce((t, a) => t + a.score, 0) / data.assessments.length)
     : null;
   const capped = critical.length > 0 && avg !== null ? Math.min(avg, 40) : avg;
+
+  const radar: RadarPoint[] = ALL.map((p) => {
+    const a = assessedMap.get(p);
+    return {
+      pillar: p,
+      score: a ? a.score : null,
+      target: a?.recommended ?? 85,
+      critical: Boolean(a?.critical),
+    };
+  });
+
+  const depletion: DepletionRow[] = sim.pillars.map((p) => ({
+    pillar: SIM_TO_PILLAR[p.pillar] ?? capitalise(p.pillar),
+    hours: Number.isFinite(p.runwayHours) ? p.runwayHours : data.scenario.hours * 1.5,
+    label: p.supplyLabel,
+    survival: ["water", "food", "heat", "medical"].includes(p.pillar),
+  }));
 
   const byKit = data.equipment.reduce<Record<string, OwnedItem[]>>((acc, e) => {
     (acc[e.kit] ||= []).push(e);
@@ -103,46 +132,61 @@ export default function Portal({ data }: { data: PortalData }) {
           </label>
         </div>
 
-        {/* ---------------- the readiness clock ---------------- */}
-        <section className={`sf-clock${sim.survived ? " ok" : ""}`}>
-          <div className="sf-clockmain">
-            <div className="sf-clocklabel">On what you own, you hold out for</div>
-            <div className="sf-clockbig">
-              {hrs(sim.failureHour)}
-              <span>in a {data.scenario.label.toLowerCase()}</span>
-            </div>
-            <div className="sf-clocksub">
-              Weakest link:{" "}
-              <strong style={{ color: PILLAR_COLOR[capitalise(sim.weakest)] ?? "#f2c744" }}>
-                {capitalise(sim.weakest)}
+        {/* ---------------- the readiness console ---------------- */}
+        <section className="sf-console">
+          <div className="sf-consoledial">
+            <ReadinessDial
+              hours={sim.failureHour}
+              scenarioHours={data.scenario.hours}
+              label={`Hours survived in a ${data.scenario.label}`}
+            />
+            <div className="sf-consolecap">
+              <span>Weakest link</span>
+              <strong style={{ color: PILLAR_COLOR[SIM_TO_PILLAR[sim.weakest]] ?? "#f2c744" }}>
+                {SIM_TO_PILLAR[sim.weakest] ?? capitalise(sim.weakest)}
               </strong>
-              {" — "}your household is only as ready as this one.
             </div>
-            <label className="sf-sort portal">
-              Test against
-              <select value={data.scenario.id} onChange={(e) => go({ s: e.target.value })}>
-                {data.scenarios.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
-          <div className="sf-clockside">
-            <div>
-              <dt>Registered</dt>
-              <dd>{data.equipment.reduce((t, e) => t + e.qty, 0)} items</dd>
+
+          <div className="sf-consolemain">
+            <div className="sf-consolehead">
+              <div>
+                <div className="sf-hz-kicker">On what you own</div>
+                <h2>{data.scenario.label}</h2>
+              </div>
+              <label className="sf-sort">
+                Run
+                <select value={data.scenario.id} onChange={(e) => go({ s: e.target.value })}>
+                  {data.scenarios.map((sc) => (
+                    <option key={sc.id} value={sc.id}>
+                      {sc.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-            <div>
-              <dt>Assessed</dt>
-              <dd>
-                {data.assessments.length} of 5 <span>areas</span>
-              </dd>
-            </div>
-            <div>
-              <dt>Needs attention</dt>
-              <dd className={data.attention.length ? "over" : ""}>{data.attention.length}</dd>
+
+            <DepletionTimeline rows={depletion} scenarioHours={data.scenario.hours} />
+
+            <div className="sf-consolestats">
+              <div>
+                <dt>Registered</dt>
+                <dd>{data.equipment.reduce((t, e) => t + e.qty, 0)}</dd>
+              </div>
+              <div>
+                <dt>Assessed</dt>
+                <dd>
+                  {data.assessments.length}<em>/5</em>
+                </dd>
+              </div>
+              <div>
+                <dt>Attention</dt>
+                <dd className={data.attention.length ? "over" : ""}>{data.attention.length}</dd>
+              </div>
+              <div>
+                <dt>Kit value</dt>
+                <dd className="sm">{eur(sim.totalCost)}</dd>
+              </div>
             </div>
           </div>
         </section>
@@ -166,33 +210,25 @@ export default function Portal({ data }: { data: PortalData }) {
                   your overall score. We do not average a serious weakness away.
                 </div>
               )}
-              <div className="sf-pillars">
-                {ALL.map((p) => {
-                  const a = assessedMap.get(p);
-                  return (
-                    <div key={p} className={`sf-pillar${a ? "" : " unassessed"}${a?.critical ? " crit" : ""}`}>
-                      <div className="sf-pillartop">
-                        <span style={{ color: PILLAR_COLOR[p] }}>{p}</span>
-                        <strong>{a ? a.score : "—"}</strong>
-                      </div>
-                      <div className="sf-pillartrack">
-                        {a && (
-                          <>
-                            <div
-                              className="sf-pillarbar"
-                              style={{ width: `${a.score}%`, background: PILLAR_COLOR[p] }}
-                            />
-                            {a.recommended !== null && (
-                              <div className="sf-pillartarget" style={{ left: `${a.recommended}%` }} />
-                            )}
-                          </>
-                        )}
-                      </div>
-                      <p>{a?.nextAction ?? "Not assessed yet — Jimmy can cover this in a few minutes."}</p>
-                    </div>
-                  );
-                })}
+              <div className="sf-radarwrap">
+                <PillarRadar points={radar} />
+                <ul className="sf-radarlegend">
+                  {ALL.map((p) => {
+                    const a = assessedMap.get(p);
+                    return (
+                      <li key={p} className={a ? (a.critical ? "crit" : "") : "unassessed"}>
+                        <i style={{ background: PILLAR_COLOR[p] }} />
+                        <div>
+                          <strong>{p}</strong>
+                          <span>{a?.nextAction ?? "Not assessed — Jimmy can cover this in a few minutes."}</span>
+                        </div>
+                        <em>{a ? a.score : "—"}</em>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
+
               {unassessed.length > 0 && (
                 <Link
                   href={`/admin/site/jimmy?q=${encodeURIComponent(
@@ -335,21 +371,7 @@ export default function Portal({ data }: { data: PortalData }) {
 
             <section className="sf-panelbox">
               <h2>How it ages</h2>
-              <div className="sf-decay">
-                {data.decay.map((d) => {
-                  const pct = Math.min(100, (d.failureHour / (data.scenario.hours * 1.5)) * 100);
-                  const fails = d.failureHour < data.scenario.hours;
-                  return (
-                    <div key={d.month} className="sf-decaycol" title={`Month ${d.month}`}>
-                      <div
-                        className={`sf-decaybar${fails ? " fails" : ""}`}
-                        style={{ height: `${Math.max(3, pct)}%` }}
-                      />
-                      <span>{d.month}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              <DecayCurve points={data.decay} scenarioHours={data.scenario.hours} />
               <p className="sf-kblede">Months from today, if you change nothing.</p>
             </section>
 
