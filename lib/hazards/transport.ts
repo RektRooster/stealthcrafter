@@ -25,7 +25,7 @@ export async function fetchTransport(): Promise<{ events: HazardEvent[]; status:
   const base: SourceStatus = {
     source: "TRANSPORT",
     label: "Roads & logistics",
-    what: "Closures and incidents on the European freight corridors — travel disruption for households, and route risk for our own inbound supply.",
+    what: "Closures on the European freight corridors — travel disruption for households, and route risk for our own inbound supply.",
     state: "error",
     detail: "",
     fetchedAt: null,
@@ -42,7 +42,9 @@ export async function fetchTransport(): Promise<{ events: HazardEvent[]; status:
     for (;;) {
       const road = queue.shift();
       if (!road) return;
-      for (const feed of ["closure", "warning"] as const) {
+      // Closures only. Roadworks and minor warnings run to hundreds of rows
+      // and would bury every other layer on the map for no household benefit.
+      for (const feed of ["closure"] as const) {
         const r = await safeFetch(`${AUTOBAHN}/${road}/services/${feed}`, {
           revalidate: 900,
           timeoutMs: 8000,
@@ -94,8 +96,8 @@ export async function fetchTransport(): Promise<{ events: HazardEvent[]; status:
   });
   await Promise.all(workers);
 
-  const trimmed = dedupe(events).slice(0, 120);
-  const allFailed = failures.length >= CORRIDORS.length * 2;
+  const trimmed = dedupe(events).slice(0, 60);
+  const allFailed = failures.length >= CORRIDORS.length;
 
   return {
     events: trimmed,
@@ -105,7 +107,7 @@ export async function fetchTransport(): Promise<{ events: HazardEvent[]; status:
       detail: allFailed
         ? `Autobahn open data unreachable — ${failures[0] || "unknown error"}.`
         : trimmed.length
-        ? `${trimmed.length} closures and warnings across ${CORRIDORS.length} German freight corridors. ` +
+        ? `${trimmed.length} closures across ${CORRIDORS.length} German freight corridors. ` +
           `1 of 5 national adapters connected — pending: ${PENDING}.`
         : `Connected to the German corridor feed; nothing currently reported. ` +
           `1 of 5 national adapters connected — pending: ${PENDING}.`,

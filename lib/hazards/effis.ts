@@ -5,25 +5,60 @@
 // household needs to keep apart — an actual fire burning nearby, and an area
 // where fire conditions are becoming unusually dangerous.
 //
-// EFFIS publishes active-fire hotspots through its OGC WFS. The public layer
-// name has moved between service generations, so we try the known names in
-// order and report which one answered. EFFIS_HOTSPOT_LAYER overrides the list.
+// EFFIS publishes hotspots through a MapServer WFS at /effis. Verified shape:
+//   ?service=WFS&version=1.1.0&request=getfeature&typename=ms:modis.hs
+//    &outputformat=geojson&maxfeatures=N
+// Properties: id, acq_at, lon, lat, frp, confidence, satellite, gid_0, CLASS.
+//
+// IMPORTANT: the layer is the whole archive and comes back in id order, so an
+// unfiltered request yields detections from years ago. Requests therefore
+// carry an OGC date predicate, and anything older than the freshness window is
+// discarded outright. If only archive rows come back we report the source as
+// needing attention rather than showing historical fires as if they were
+// burning now.
 import { countryOf, projectLonLat } from "@/lib/euro-map";
 import { PILLARS_BY_KIND, safeFetch } from "./types";
 import type { HazardEvent, SourceStatus } from "./types";
 
-const WFS = "https://maps.effis.emergency.copernicus.eu/gwis";
+const BASE = "https://maps.effis.emergency.copernicus.eu/effis";
 
-const CANDIDATE_LAYERS = ["ms:modis.hs", "ms:viirs.hs", "modis.hs", "viirs.hs"];
+const LAYERS = process.env.EFFIS_HOTSPOT_LAYER
+  ? [process.env.EFFIS_HOTSPOT_LAYER]
+  : ["ms:viirs.hs", "ms:modis.hs"];
 
-// Continental frame (minlon,minlat,maxlon,maxlat) in EPSG:4326.
-const BBOX = "-26,32,46,72";
+const FRAME = { minlon: -26, maxlon: 46, minlat: 32, maxlat: 72 };
+const WINDOW_DAYS = 3;
+const MAX_AGE_DAYS = 14; // hard freshness guard
+
+function sinceLiteral(days: number): string {
+  const d = new Date(Date.now() - days * 864e5);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} 00:00:00`;
+}
+
+/* Date + bounding-box predicate. lat and lon are exposed as their own
+   properties, which sidesteps the WFS 1.1 EPSG:4326 axis-order trap that a
+   <BBOX> operator would otherwise hit. */
+function buildFilter(): string {
+  const between = (prop: string, lo: number, hi: number) =>
+    `<PropertyIsBetween><PropertyName>${prop}</PropertyName>` +
+    `<LowerBoundary><Literal>${lo}</Literal></LowerBoundary>` +
+    `<UpperBoundary><Literal>${hi}</Literal></UpperBoundary></PropertyIsBetween>`;
+  return (
+    `<Filter><And>` +
+    `<PropertyIsGreaterThan><PropertyName>acq_at</PropertyName>` +
+    `<Literal>${sinceLiteral(WINDOW_DAYS)}</Literal></PropertyIsGreaterThan>` +
+    between("lat", FRAME.minlat, FRAME.maxlat) +
+    between("lon", FRAME.minlon, FRAME.maxlon) +
+    `</And></Filter>`
+  );
+}
 
 export async function fetchEffis(): Promise<{ events: HazardEvent[]; status: SourceStatus }> {
   const base: SourceStatus = {
     source: "EFFIS",
     label: "Wildfires",
-    what: "One harmonised European wildfire layer — active-fire detections, so a fire burning nearby is distinguishable from an area merely running hot.",
+    what: "One harmonised European wildfire layer — active-fire detections from the last 3 days, so a fire burning nearby is distinguishable from an area merely running hot.",
     state: "error",
     detail: "",
     fetchedAt: null,
@@ -32,53 +67,61 @@ export async function fetchEffis(): Promise<{ events: HazardEvent[]; status: Sou
     href: "https://forest-fire.emergency.copernicus.eu/",
   };
 
-  const layers = process.env.EFFIS_HOTSPOT_LAYER
-    ? [process.env.EFFIS_HOTSPOT_LAYER]
-    : CANDIDATE_LAYERS;
+  const notes: string[] = [];
+  let sawStale = false;
 
-  const failures: string[] = [];
-
-  for (const layer of layers) {
+  for (const layer of LAYERS) {
     const url =
-      `${WFS}?service=WFS&version=2.0.0&request=GetFeature` +
-      `&typeName=${encodeURIComponent(layer)}` +
-      `&outputFormat=${encodeURIComponent("application/json")}` +
-      `&srsName=EPSG:4326&count=600&bbox=${encodeURIComponent(BBOX + ",EPSG:4326")}`;
+      `${BASE}?service=WFS&version=1.1.0&request=getfeature` +
+      `&typename=${encodeURIComponent(layer)}&outputformat=geojson&maxfeatures=1500` +
+      `&filter=${encodeURIComponent(buildFilter())}`;
 
-    const r = await safeFetch(url, { revalidate: 1800, timeoutMs: 12000 });
+    const r = await safeFetch(url, { revalidate: 1800, timeoutMs: 14000 });
     if (!r.ok) {
-      failures.push(`${layer}: ${r.detail}`);
+      notes.push(`${layer}: ${r.detail}`);
       continue;
     }
 
     let json: any;
     try {
       const text = await r.res.text();
-      if (/ServiceException|ows:Exception|<\?xml/i.test(text.slice(0, 400))) {
-        failures.push(`${layer}: service returned an OGC exception, not GeoJSON`);
+      if (/ServiceException|ows:Exception|^\s*<\?xml/i.test(text.slice(0, 400))) {
+        notes.push(`${layer}: OGC exception rather than GeoJSON`);
         continue;
       }
       json = JSON.parse(text);
     } catch (e: any) {
-      failures.push(`${layer}: ${e?.message || e}`);
+      notes.push(`${layer}: ${e?.message || e}`);
       continue;
     }
 
     const feats: any[] = Array.isArray(json?.features) ? json.features : [];
     if (!feats.length) {
-      failures.push(`${layer}: reachable but returned no features`);
+      notes.push(`${layer}: no detections in the window`);
       continue;
     }
 
-    const events = mapHotspots(feats, layer);
+    const cutoff = Date.now() - MAX_AGE_DAYS * 864e5;
+    const fresh = feats.filter((f) => {
+      const t = Date.parse(String(f?.properties?.acq_at || "").replace(" ", "T") + "Z");
+      return Number.isFinite(t) && t >= cutoff;
+    });
+
+    if (!fresh.length) {
+      sawStale = true;
+      notes.push(`${layer}: date predicate ignored, archive rows only`);
+      continue;
+    }
+
+    const events = cluster(mapHotspots(fresh));
     return {
       events,
       status: {
         ...base,
         state: events.length ? "live" : "empty",
         detail: events.length
-          ? `${events.length} active-fire detections from EFFIS layer ${layer}.`
-          : `EFFIS layer ${layer} answered but no detections fell inside the frame.`,
+          ? `${events.length} active-fire areas from EFFIS layer ${layer} (last ${WINDOW_DAYS} days).`
+          : `EFFIS layer ${layer} answered but nothing fell inside the European frame.`,
         fetchedAt: new Date().toISOString(),
         count: events.length,
       },
@@ -90,44 +133,39 @@ export async function fetchEffis(): Promise<{ events: HazardEvent[]; status: Sou
     status: {
       ...base,
       state: "error",
-      detail:
-        `EFFIS active-fire layer did not answer. Tried: ${layers.join(", ")}. ` +
-        `Last errors — ${failures.slice(-2).join(" | ")}. ` +
-        `EFFIS moves its public WFS layer names between service generations; set EFFIS_HOTSPOT_LAYER to the current one to pin it.`,
+      detail: sawStale
+        ? `EFFIS answered but only with archive detections, so nothing is shown — historical fires must never appear as if they were burning now. Tried: ${LAYERS.join(", ")}. Pin the current layer with EFFIS_HOTSPOT_LAYER.`
+        : `EFFIS active-fire layer did not answer. Tried: ${LAYERS.join(", ")}. ${notes.slice(-2).join(" | ")}`,
     },
   };
 }
 
-function mapHotspots(feats: any[], layer: string): HazardEvent[] {
+function mapHotspots(feats: any[]): HazardEvent[] {
   const out: HazardEvent[] = [];
   for (const f of feats) {
     const p = f?.properties || {};
     const c = f?.geometry?.coordinates;
-    const lon = Number(Array.isArray(c) ? c[0] : p.longitude ?? p.lon ?? p.x);
-    const lat = Number(Array.isArray(c) ? c[1] : p.latitude ?? p.lat ?? p.y);
+    const lon = Number(Array.isArray(c) ? c[0] : p.lon);
+    const lat = Number(Array.isArray(c) ? c[1] : p.lat);
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
 
-    // EFFIS hotspot attributes vary by layer generation — read defensively.
-    const conf = Number(p.confidence ?? p.conf ?? NaN);
-    const frp = Number(p.frp ?? p.FRP ?? NaN); // fire radiative power (MW)
-    const place = String(p.place ?? p.province ?? p.commune ?? p.country ?? "").trim();
-    const when = p.acq_date
-      ? `${p.acq_date}T${String(p.acq_time ?? "0000").padStart(4, "0").replace(/(\d{2})(\d{2})/, "$1:$2")}:00Z`
-      : p.date || p.datetime || null;
+    const conf = Number(p.confidence);
+    const frp = Number(p.frp); // fire radiative power, MW
+    const at = String(p.acq_at || "").replace(" ", "T") + "Z";
 
-    // Fire radiative power is the honest intensity proxy; confidence gates it.
+    // Fire radiative power is the honest intensity proxy; low confidence caps it.
     let severity: HazardEvent["severity"] = "watch";
     if (Number.isFinite(frp)) {
-      severity = frp >= 200 ? "severe" : frp >= 50 ? "elevated" : frp >= 10 ? "watch" : "info";
+      severity = frp >= 250 ? "severe" : frp >= 80 ? "elevated" : frp >= 15 ? "watch" : "info";
     }
     if (Number.isFinite(conf) && conf < 50 && severity !== "info") severity = "watch";
 
     const iso2 = countryOf(lon, lat);
     out.push({
-      id: `EFFIS:${p.id ?? p.gid ?? p.fid ?? `${lat.toFixed(3)},${lon.toFixed(3)},${when ?? ""}`}`,
+      id: `EFFIS:${p.id ?? `${lat.toFixed(3)},${lon.toFixed(3)},${p.acq_at ?? ""}`}`,
       source: "EFFIS",
       kind: "wildfire",
-      title: `Active fire detection${place ? ` — ${place}` : iso2 ? ` — ${iso2}` : ""}`,
+      title: `Active fire detection${iso2 ? ` — ${iso2}` : ""}`,
       summary:
         `Satellite fire detection${Number.isFinite(frp) ? `, radiative power ${Math.round(frp)} MW` : ""}` +
         `${Number.isFinite(conf) ? `, ${Math.round(conf)}% confidence` : ""}. ` +
@@ -139,17 +177,16 @@ function mapHotspots(feats: any[], layer: string): HazardEvent[] {
       severity,
       magnitude: Number.isFinite(frp) ? Math.round(frp) : null,
       unit: Number.isFinite(frp) ? "MW" : null,
-      at: parseWhen(when),
+      at: Number.isFinite(Date.parse(at)) ? new Date(at).toISOString() : new Date().toISOString(),
       url: "https://forest-fire.emergency.copernicus.eu/apps/effis_current_situation/",
       pillars: PILLARS_BY_KIND.wildfire,
     });
   }
-  // EFFIS returns raw satellite pixels; cluster tight groups so one large fire
-  // is one marker rather than forty.
-  return cluster(out);
+  return out;
 }
 
-/** Collapse detections within ~0.15° of each other into their strongest member. */
+/** Collapse detections within ~0.15° into their strongest member: one fire,
+    one marker, rather than forty satellite pixels. */
 function cluster(events: HazardEvent[]): HazardEvent[] {
   const CELL = 0.15;
   const byCell = new Map<string, HazardEvent[]>();
@@ -164,16 +201,10 @@ function cluster(events: HazardEvent[]): HazardEvent[] {
     group.sort((a, b) => (b.magnitude ?? 0) - (a.magnitude ?? 0));
     const lead = group[0];
     if (group.length > 1) {
-      lead.title = `${group.length} active fire detections${lead.countryIso2 ? ` — ${lead.countryIso2}` : ""}`;
-      lead.summary = `Cluster of ${group.length} satellite fire detections in one area. ${lead.summary}`;
+      lead.title = `${group.length} fire detections${lead.countryIso2 ? ` — ${lead.countryIso2}` : ""}`;
+      lead.summary = `Cluster of ${group.length} satellite detections in one area. ${lead.summary}`;
     }
     out.push(lead);
   }
-  return out.sort((a, b) => (b.magnitude ?? 0) - (a.magnitude ?? 0)).slice(0, 250);
-}
-
-function parseWhen(v: any): string {
-  if (!v) return new Date().toISOString();
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+  return out.sort((a, b) => (b.magnitude ?? 0) - (a.magnitude ?? 0)).slice(0, 200);
 }

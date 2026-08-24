@@ -79,6 +79,10 @@ export async function getHazardSnapshot(): Promise<HazardSnapshot> {
   events.sort((a, b) => {
     const d = SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity];
     if (d) return d;
+    // An event inside a country outranks an unattributed offshore one of the
+    // same severity — the lead card has to be something a household can act on.
+    const c = Number(Boolean(b.countryIso2)) - Number(Boolean(a.countryIso2));
+    if (c) return c;
     return new Date(b.at).getTime() - new Date(a.at).getTime();
   });
 

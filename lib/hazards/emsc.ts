@@ -6,7 +6,8 @@
 // depth and where it actually happened.
 import { countryOf, projectLonLat } from "@/lib/euro-map";
 import { PILLARS_BY_KIND, safeFetch, severityFromMagnitude } from "./types";
-import type { HazardEvent, SourceStatus } from "./types";
+import { SEVERITY_RANK } from "./types";
+import type { HazardEvent, Severity, SourceStatus } from "./types";
 
 const BASE = "https://www.seismicportal.eu/fdsnws/event/1/query";
 
@@ -56,13 +57,17 @@ export async function fetchEmsc(): Promise<{ events: HazardEvent[]; status: Sour
     const region = String(p.flynn_region || "").trim() || "Europe / Mediterranean";
     const at = p.time ? new Date(p.time).toISOString() : new Date().toISOString();
 
-    // Shallow quakes shake far harder than deep ones of the same magnitude,
-    // so a shallow event is promoted one step.
-    let severity = severityFromMagnitude(mag, [3.5, 4.5, 5.5]);
-    if (Number.isFinite(depth) && depth <= 15 && mag >= 4.0) {
-      if (severity === "watch") severity = "elevated";
-      else if (severity === "elevated") severity = "severe";
-    }
+    const iso2 = countryOf(lon, lat);
+
+    // Magnitude alone is not the question a household is asking. A shallow
+    // quake shakes far harder than a deep one of the same size, and a mid-
+    // ocean event of any size is not something anyone should act on. So:
+    // promote shallow onshore events one step, demote unattributed offshore
+    // events one step.
+    let severity = severityFromMagnitude(mag, [4.0, 5.0, 6.0]);
+    const shallow = Number.isFinite(depth) && depth <= 20;
+    if (shallow && mag >= 4.5 && iso2) severity = bump(severity, 1);
+    if (!iso2) severity = bump(severity, -1);
 
     events.push({
       id: `EMSC:${id}`,
@@ -73,7 +78,9 @@ export async function fetchEmsc(): Promise<{ events: HazardEvent[]; status: Sour
         `Magnitude ${mag.toFixed(1)}` +
         (Number.isFinite(depth) ? ` at ${Math.round(depth)} km depth` : "") +
         `, ${titleCase(region)}.` +
-        (severity === "info"
+        (!iso2
+          ? " Offshore — recorded for completeness, no household action implied."
+          : severity === "info"
           ? " Below the level that is normally felt indoors."
           : severity === "watch"
           ? " Widely felt locally; damage unlikely."
@@ -83,7 +90,7 @@ export async function fetchEmsc(): Promise<{ events: HazardEvent[]; status: Sour
       lat,
       lon,
       xy: projectLonLat(lon, lat),
-      countryIso2: countryOf(lon, lat),
+      countryIso2: iso2,
       severity,
       magnitude: mag,
       unit: "M",
@@ -105,6 +112,11 @@ export async function fetchEmsc(): Promise<{ events: HazardEvent[]; status: Sour
       count: events.length,
     },
   };
+}
+
+const ORDER: Severity[] = ["info", "watch", "elevated", "severe"];
+function bump(s: Severity, by: number): Severity {
+  return ORDER[Math.max(0, Math.min(ORDER.length - 1, SEVERITY_RANK[s] + by))];
 }
 
 function titleCase(s: string): string {

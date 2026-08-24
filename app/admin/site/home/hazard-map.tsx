@@ -186,7 +186,7 @@ export default function HazardMap({
                   className={`sf-hz-country${c.eu ? " eu" : " ctx"}${selected ? " sel" : ""}`}
                   style={
                     worst >= 1
-                      ? { fill: hexA(SEV_COLOR[sevKey], c.eu ? 0.3 : 0.22) }
+                      ? { fill: hexA(SEV_COLOR[sevKey], c.eu ? 0.17 : 0.12) }
                       : undefined
                   }
                   onMouseEnter={() =>
