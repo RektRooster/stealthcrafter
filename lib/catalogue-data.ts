@@ -102,10 +102,28 @@ export function fmtEur(price: number | null): string {
   return `€${price.toLocaleString("en-IE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/* image_urls is a JSON array stored in a text column — ["https://…", …].
+   Parse it properly, and fall back to scraping URLs out of whatever shape the
+   row actually holds. */
+export function parseImages(raw: string | null): string[] {
+  if (!raw) return [];
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith("[")) {
+    try {
+      const arr = JSON.parse(trimmed);
+      if (Array.isArray(arr)) {
+        return arr.map((u) => String(u).trim()).filter((u) => /^https?:\/\//.test(u));
+      }
+    } catch {
+      /* fall through to the scrape below */
+    }
+  }
+  return (trimmed.match(/https?:\/\/[^\s",'\]]+/g) || []).map((u) => u.trim());
+}
+
 function firstImage(raw: string | null): string | null {
-  if (!raw) return null;
-  const first = raw.split(/[,\s]+/).find((u) => /^https?:\/\//.test(u));
-  return first || null;
+  return parseImages(raw)[0] ?? null;
 }
 
 function stateOf(p: any, testedIds: Set<string>): EvidenceState {
@@ -335,9 +353,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     (s) => s.value.length > 0
   );
 
-  const imagesAll = (data.image_urls || "")
-    .split(/[,\s]+/)
-    .filter((u: string) => /^https?:\/\//.test(u));
+  const imagesAll = parseImages(data.image_urls);
 
   return {
     ...base,
