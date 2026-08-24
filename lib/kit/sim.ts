@@ -351,6 +351,12 @@ export function recommend(
   limit = 8
 ): Recommendation[] {
   const base = simulate(h, s, kit);
+  const weakest = base.weakest;
+  const cap = s.hours * 2;
+  const basePillar = base.pillars.find((p) => p.pillar === weakest)!;
+  const before = Math.min(basePillar.runwayHours, cap);
+  const baseMin = Math.min(base.failureHour, cap);
+
   const inKit = new Set(kit.map((i) => i.id));
   const out: Recommendation[] = [];
 
@@ -360,17 +366,26 @@ export function recommend(
     if (price <= 0) continue;
 
     const next = simulate(h, s, [...kit, { ...c, qty: 1 }]);
-    const before = Math.min(base.failureHour, s.hours * 3);
-    const after = Math.min(next.failureHour, s.hours * 3);
-    const gained = after - before;
-    if (gained <= 0.25) continue;
+
+    // Rank against the WEAKEST PILLAR's own runway, not the household minimum.
+    // With the floor rule, an empty kit has every pillar at zero, so nothing
+    // can ever raise the minimum and a naive greedy optimiser never starts.
+    const nextPillar = next.pillars.find((p) => p.pillar === weakest)!;
+    let gained = Math.min(nextPillar.runwayHours, cap) - before;
+
+    if (gained <= 0.25) {
+      // Nothing for the weak pillar — but it may still have lifted the floor.
+      const lift = Math.min(next.failureHour, cap) - baseMin;
+      if (lift > 0.25) gained = lift;
+      else continue;
+    }
 
     out.push({
       item: { ...c, qty: 1 },
       hoursGained: gained,
       hoursPerEuro: gained / price,
-      pillar: base.weakest,
-      reason: reasonFor(c, base.weakest),
+      pillar: weakest,
+      reason: reasonFor(c, weakest),
     });
   }
 

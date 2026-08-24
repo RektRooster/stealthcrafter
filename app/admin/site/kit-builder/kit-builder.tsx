@@ -105,25 +105,16 @@ export default function KitBuilder({ catalogue, liveHints }: Props) {
     (budget: number) => {
       let current: KitItem[] = [];
       let spent = 0;
-      for (let step = 0; step < 40; step++) {
-        const r = recommend(household, scenario, current, catalogue, 1);
-        if (!r.length) break;
-        const pick = r[0];
-        const price = pick.item.price ?? 0;
-        if (spent + price > budget) {
-          // try the next few cheaper options before giving up
-          const alt = recommend(household, scenario, current, catalogue, 12).find(
-            (x) => spent + (x.item.price ?? 0) <= budget
-          );
-          if (!alt) break;
-          current = [...current, { ...alt.item, qty: 1 }];
-          spent += alt.item.price ?? 0;
-          continue;
-        }
+      for (let step = 0; step < 60; step++) {
+        const options = recommend(household, scenario, current, catalogue, 14);
+        if (!options.length) break;
+        const pick = options.find((o) => spent + (o.item.price ?? 0) <= budget);
+        if (!pick) break;
         current = [...current, { ...pick.item, qty: 1 }];
-        spent += price;
+        spent += pick.item.price ?? 0;
         const s = simulate(household, scenario, current);
-        if (s.failureHour >= scenario.hours * 1.6) break; // comfortably clear
+        // Comfortably clear on every pillar — stop before it starts gold-plating.
+        if (s.failureHour >= scenario.hours * 1.5) break;
       }
       setKit(current);
     },
