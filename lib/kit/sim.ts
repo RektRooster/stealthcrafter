@@ -293,9 +293,12 @@ export function simulate(h: Household, s: Scenario, items: KitItem[]): SimResult
     },
     {
       pillar: "medical",
-      // Medical does not deplete — it is either covered or it is not. A kit
-      // missing whole categories fails from hour zero for that need.
-      runwayHours: medCoverage >= 0.999 ? Infinity : medCoverage <= 0 ? 0 : s.hours * medCoverage,
+      // Medical does not deplete — it is coverage, not a store. Missing whole
+      // categories shortens how long you can go before it bites, but a household
+      // with nothing is at serious risk rather than dead at hour zero, so the
+      // runway floors at a quarter of the scenario instead of collapsing to 0.
+      runwayHours:
+        medCoverage >= 0.999 ? Infinity : s.hours * (0.25 + 0.75 * medCoverage),
       coverage: medCoverage,
       supplyLabel: `${medCovered} of ${MED_REQUIRED.length} core capabilities`,
       demandLabel: MED_REQUIRED.filter((t) => !supply.medicalTags.has(t)).join(", ") || "complete",

@@ -329,6 +329,13 @@ export function deriveAttrs(p: AttrInput): KitAttrs {
   /* ---------------- MEDICAL ---------------- */
   if (cat === "Medical" || p.pillar === "Medical") {
     const tags = MED_TAGS.filter(([re]) => re.test(t)).map(([, tag]) => tag);
+    // A general first aid kit does not enumerate its contents in its name, but
+    // every one of them contains dressings, antiseptic and painkillers. Credit
+    // those; do NOT credit trauma or burns, which need dedicated items.
+    if (tags.includes("kit-general")) tags.push("wound-care", "antisepsis", "pain");
+    // A trauma kit or IFAK is built around bleeding control.
+    if (/ifak|trauma kit|bleeding control|combat|tasmanian tiger first aid/i.test(t))
+      tags.push("trauma", "wound-care");
     if (tags.length) {
       a.medical = [...new Set(tags)];
       basis = "parsed";
