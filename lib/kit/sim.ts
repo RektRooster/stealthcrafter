@@ -310,10 +310,19 @@ export function simulate(h: Household, s: Scenario, items: KitItem[]): SimResult
     p.coverage = Math.max(0, Math.min(1, p.runwayHours / s.hours));
   }
 
-  // The floor rule from SC 03: the household is capped by its worst pillar.
+  // The floor rule from SC 03 applies to SURVIVAL pillars. Water, food, warmth
+  // and medical will kill you; running out of phone charge will not. Light and
+  // power degrade the situation badly and are reported in full, but they only
+  // set the household floor when someone actually depends on powered medical
+  // equipment. Without this the model reported "0 hours" for a family who owned
+  // food, water, warmth and a first aid kit but no battery bank.
+  const survival: Pillar[] = ["water", "food", "heat", "medical"];
+  if (h.medicalPower) survival.push("power");
+
   let failureHour = Infinity;
   let weakest: Pillar = "water";
   for (const p of pillars) {
+    if (!survival.includes(p.pillar)) continue;
     if (p.runwayHours < failureHour) {
       failureHour = p.runwayHours;
       weakest = p.pillar;

@@ -269,6 +269,12 @@ export function deriveAttrs(p: AttrInput): KitAttrs {
       a.whPerDay = 6;
       basis = "typical";
     }
+    // A rechargeable torch or lantern carries its own cell. Small, but it is
+    // not nothing, and treating it as zero made power look like a total gap.
+    if (!a.wh && /torch|flashlight|headlamp|head torch|lantern/i.test(n) && !/glow stick|chemlight|candle/i.test(n)) {
+      a.wh = /lantern|power|core|rechargeable/i.test(n) ? 6 : 3;
+      basis = basis === "parsed" ? basis : "typical";
+    }
     if (/torch|flashlight|headlamp|head torch|lantern|light|glow stick|chemlight/i.test(n)) {
       const lm = grab(p.name, /(\d[\d.,]*)\s*(?:lumen|lm)\b/i);
       const hrs = grab(p.name, /(\d+(?:[.,]\d+)?)\s*[-\s]?hour/i);
