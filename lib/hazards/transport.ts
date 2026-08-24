@@ -12,7 +12,7 @@
 // Italy, DGT for Spain) attach to the same normaliser.
 import { countryOf, projectLonLat } from "@/lib/euro-map";
 import { PILLARS_BY_KIND, safeFetch } from "./types";
-import type { HazardEvent, Severity, SourceStatus } from "./types";
+import type { HazardEvent, SourceStatus } from "./types";
 
 const AUTOBAHN = "https://verkehr.autobahn.de/o/autobahn";
 
@@ -20,6 +20,16 @@ const AUTOBAHN = "https://verkehr.autobahn.de/o/autobahn";
 const CORRIDORS = ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10", "A45", "A61", "A81"];
 
 const PENDING = "Netherlands (NDW), France (Bison Futé), Italy (ANAS), Spain (DGT)";
+
+// Scheduled construction, not an incident.
+const PLANNED = /bauphase|bauarbeit|baustelle|bauma(ss|ß)nahme|gesamtma(ss|ß)nahme|sanierung|erneuerung/i;
+
+/** "A3 | Manzing - Deggendorf" -> "Manzing and Deggendorf". */
+function cleanSegment(raw: string): string {
+  const s = raw.replace(/^[A-Z]?\d+\s*\|\s*/, "").trim();
+  if (!s) return "";
+  return s.replace(/\s*(->|-|–|—)\s*/g, " and ").slice(0, 80);
+}
 
 export async function fetchTransport(): Promise<{ events: HazardEvent[]; status: SourceStatus }> {
   const base: SourceStatus = {
@@ -65,25 +75,35 @@ export async function fetchTransport(): Promise<{ events: HazardEvent[]; status:
           const lat = Number(w?.coordinate?.lat);
           const lon = Number(w?.coordinate?.long ?? w?.coordinate?.lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
           const title = String(w?.title || "").trim();
           const subtitle = String(w?.subtitle || "").trim();
           const body = Array.isArray(w?.description)
             ? w.description.filter(Boolean).join(" ").trim()
             : String(w?.description || "").trim();
 
-          const severity: Severity = feed === "closure" ? "elevated" : "watch";
-          events.push({
+          // The German feed is dominated by long-running construction phases.
+          // A scheduled roadworks closure is not a hazard and must not sit on
+          // a preparedness map next to earthquakes.
+          if (PLANNED.test(body) || PLANNED.test(title) || PLANNED.test(subtitle)) continue;
+
+          const where = cleanSegment(subtitle || title);
+          out.push({
             id: `TRANSPORT:DE:${w?.identifier || `${road}:${lat},${lon}`}`,
             source: "TRANSPORT",
             kind: "transport",
-            title: `${road} — ${feed === "closure" ? "closure" : "traffic warning"}${subtitle ? ` (${subtitle})` : ""}`,
-            summary: [title, body].filter(Boolean).join(" · ").slice(0, 420) ||
-              `${feed === "closure" ? "Full or partial closure" : "Traffic warning"} reported on ${road}.`,
+            title: `${road} closed${where ? ` — ${where}` : ""}`,
+            summary:
+              `Unplanned closure reported on the ${road} in Germany` +
+              (where ? ` between ${where}` : "") +
+              `. Freight corridor: expect delays to deliveries routed through this section.`,
             lat,
             lon,
             xy: projectLonLat(lon, lat),
             countryIso2: countryOf(lon, lat) || "DE",
-            severity,
+            // Deliberately capped at "worth knowing". A road closure is a
+            // travel and logistics inconvenience, not a household emergency.
+            severity: "watch",
             magnitude: null,
             unit: null,
             at: parseWhen(w?.startTimestamp),
