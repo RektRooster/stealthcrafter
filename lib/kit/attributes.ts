@@ -283,7 +283,13 @@ export function deriveAttrs(p: AttrInput): KitAttrs {
   }
 
   /* ---------------- SHELTER / WARMTH ---------------- */
-  if (cat === "Shelter & Warmth" || cat === "Clothing / PPE") {
+  // Not gated on category alone: an emergency blanket is an emergency blanket
+  // wherever it happens to be filed, and SOL blankets sit under Medical.
+  const looksInsulating =
+    /sleeping bag|bivvy|bivy|bothy|survival bag|blizzard|blanket|quilt|sleeping pad|sleeping mat|hand warmer|foot warmer|jacket|fleece|base layer|beanie|glove|sock|poncho|tarp|tent|hammock|shelter/i.test(
+      n
+    );
+  if (cat === "Shelter & Warmth" || cat === "Clothing / PPE" || looksInsulating) {
     if (/sleeping bag|schlafsack|softie|down bag|carinthia|snugpak softie|grüezi/i.test(n)) {
       const c = grab(p.name, /-\s*(\d+)\s*°?c/i);
       a.insulationC = c !== null ? Math.min(18, 4 + c) : /expedition|1000|antarctica|defence 6/i.test(n) ? 16 : 9;
