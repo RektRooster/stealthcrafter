@@ -4202,3 +4202,96 @@ table.cc-comp-flagtable { min-width: 760px; }
   .sf-cptable tr { border-bottom: 1px solid rgba(255,255,255,.12); padding: 8px 0; }
   .sf-cptable td { border: none; padding: 3px 10px; }
 }
+
+/* ---- Tested Reports: graphics ---- */
+.sf-ring { display: block; }
+.sf-ringnum { font-size: 34px; font-weight: 600; letter-spacing: -.02em; }
+.sf-ringsub { fill: #8d97a1; font-size: 11px; letter-spacing: .04em; }
+
+.sf-repring {
+  margin-top: 16px; display: flex; align-items: center; gap: 18px;
+  border: 1px solid rgba(255,255,255,.13); border-radius: 10px;
+  padding: 14px 18px; background: rgba(255,255,255,.03);
+}
+.sf-repringkey { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.sf-repringkey span { display: flex; align-items: center; gap: 7px; color: #a7b1bb; }
+.sf-repringkey span::before {
+  content: ""; width: 10px; height: 10px; border-radius: 2px; background: currentColor;
+}
+.sf-repringkey .ok { color: #6ee7a0; }
+.sf-repringkey .bad { color: #f4553c; }
+.sf-repringkey .na { color: #8d97a1; }
+
+/* section scorecard */
+.sf-scorecard { display: flex; flex-direction: column; gap: 9px; }
+.sf-scorerow { display: grid; grid-template-columns: 22px 190px minmax(0,1fr) 54px; gap: 12px; align-items: center; }
+.sf-scorename { font-size: 12.5px; color: #c3ccd6; }
+.sf-scoretrack {
+  position: relative; height: 18px; border-radius: 4px;
+  background: rgba(255,255,255,.07); overflow: hidden; display: flex;
+}
+.sf-scorebar { height: 100%; background: #6ee7a0; opacity: .85; }
+.sf-scorebar.miss { background: #f4553c; opacity: 1; }
+.sf-scoreval { font-size: 12px; color: #c3ccd6; text-align: right; }
+.sf-scorerow.miss .sf-scoreval { color: #f4553c; font-weight: 600; }
+.sf-scorerow.miss .sf-scorename { color: #f0ece4; }
+
+/* measured gauges */
+.sf-gauges { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap: 20px; }
+.sf-gauge { display: flex; flex-direction: column; gap: 8px; }
+.sf-gaugehead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.sf-gaugehead strong { font-size: 12.5px; color: #e8e3da; font-weight: 600; }
+.sf-gaugehead .ok { font-size: 18px; color: #6ee7a0; font-weight: 600; }
+.sf-gaugehead .bad { font-size: 18px; color: #f4553c; font-weight: 600; }
+.sf-gaugetrack {
+  position: relative; height: 26px; border-radius: 5px;
+  background: rgba(255,255,255,.07); overflow: visible;
+}
+.sf-gaugebar {
+  height: 100%; border-radius: 5px 0 0 5px; background: #6ee7a0; opacity: .85;
+}
+.sf-gaugebar.bad { background: #f4553c; opacity: 1; }
+.sf-gaugeth { position: absolute; top: -5px; bottom: -5px; width: 2px; background: rgba(255,255,255,.7); }
+.sf-gaugeth span {
+  position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+  font-size: 9.5px; color: #a7b1bb; white-space: nowrap;
+}
+.sf-gaugefoot { font-size: 11px; color: #8d97a1; }
+
+/* evidence slots */
+.sf-evidence { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.sf-evidence img {
+  width: 88px; height: 66px; object-fit: cover; border-radius: 5px;
+  border: 1px solid rgba(255,255,255,.14); background: #131b24;
+}
+.sf-evslot {
+  width: 88px; height: 66px; border-radius: 5px;
+  border: 1px dashed rgba(255,255,255,.18);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9.5px; color: #6f7a85; text-align: center; letter-spacing: .04em;
+}
+
+/* "what we would give you instead" */
+.sf-alt {
+  margin-top: 16px; display: flex; flex-direction: column; gap: 5px;
+  border: 1px solid rgba(110,231,160,.4); border-radius: 9px;
+  padding: 14px 18px; background: rgba(110,231,160,.08); text-decoration: none;
+  transition: border-color .15s ease;
+}
+.sf-alt:hover { border-color: #6ee7a0; }
+.sf-alt span { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: #6ee7a0; }
+.sf-alt strong { font-size: 15px; color: #f6f2ea; font-weight: 600; }
+.sf-alt em { font-size: 11.5px; color: #a7b1bb; font-style: normal; }
+
+/* head-to-head threshold marker */
+.sf-h2htrack { position: relative; }
+.sf-h2hth { position: absolute; top: -3px; bottom: -3px; width: 2px; background: rgba(255,255,255,.65); }
+
+/* card ring */
+.sf-tcardring {
+  position: absolute; right: 8px; bottom: 8px;
+  background: rgba(9,14,20,.82); border-radius: 50%; padding: 2px;
+  backdrop-filter: blur(3px);
+}
+.sf-tcardring .sf-ringnum { font-size: 17px; }
+.sf-tcardring .sf-ringsub { font-size: 6.5px; }

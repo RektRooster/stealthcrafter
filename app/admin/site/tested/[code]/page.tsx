@@ -2,13 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getReport } from "@/lib/tested-data";
 import type { Checkpoint } from "@/lib/tested-data";
+import { Evidence, MeasuredGauge, ScoreRing, SectionScorecard } from "../report-visuals";
 
 export const dynamic = "force-dynamic";
 
 const VERDICT: Record<string, { label: string; tone: string; line: string }> = {
   pass: { label: "PASS", tone: "go", line: "Cleared every safety-critical checkpoint." },
   review: { label: "REVIEW", tone: "warm", line: "Usable, with a finding you need to know about." },
-  fail: { label: "FAIL", tone: "stop", line: "Did not pass. We will not carry it on this result." },
+  fail: { label: "FAIL", tone: "stop", line: "Did not pass." },
 };
 
 const RESULT: Record<string, { mark: string; cls: string; label: string }> = {
@@ -68,6 +69,14 @@ export default async function ReportPage({ params }: { params: Promise<{ code: s
             ) : (
               <div className="sf-pdpnoimg">No image yet</div>
             )}
+            <div className="sf-repring">
+              <ScoreRing passed={r.passed} failed={r.failed} na={r.na} verdict={r.verdict} />
+              <div className="sf-repringkey">
+                <span className="ok">{r.passed} met</span>
+                {r.failed > 0 && <span className="bad">{r.failed} missed</span>}
+                {r.na > 0 && <span className="na">{r.na} n/a</span>}
+              </div>
+            </div>
           </div>
         </header>
 
@@ -131,6 +140,12 @@ export default async function ReportPage({ params }: { params: Promise<{ code: s
           </div>
         )}
 
+        {/* ---- section scorecard ---- */}
+        <section className="sf-panelbox">
+          <h2>Where it scored, section by section</h2>
+          <SectionScorecard sections={r.sections} />
+        </section>
+
         {/* ---- pre-registration, stated plainly ---- */}
         <section className="sf-prereg">
           <h2>We wrote down what we expected before we opened the box</h2>
@@ -166,28 +181,31 @@ export default async function ReportPage({ params }: { params: Promise<{ code: s
                   </div>
                 </div>
                 {c.notes && <p>{c.notes}</p>}
+                <Evidence urls={c.evidence} />
               </div>
             ))}
+            {r.alternative && (
+              <Link href={`/admin/site/tested/${r.alternative.code}`} className="sf-alt">
+                <span>What we would give you instead</span>
+                <strong>{r.alternative.product}</strong>
+                <em>Passed the same protocol with no misses →</em>
+              </Link>
+            )}
           </section>
         )}
 
         {/* ---- measured figures ---- */}
         {measured.length > 0 && (
           <section className="sf-panelbox">
-            <h2>What we measured</h2>
+            <h2>What we measured, against what we expected</h2>
             <p className="sf-kblede">
-              These are our numbers, not the manufacturer&apos;s. Where they differ from the box, the
-              Kit Builder uses ours.
+              The pale marker is the threshold we wrote down before the session. The bar is what the
+              product actually did. These are our numbers, not the manufacturer&apos;s — and where
+              they differ from the box, the Kit Builder uses ours.
             </p>
-            <div className="sf-measured">
+            <div className="sf-gauges">
               {measured.map((c) => (
-                <div key={c.id}>
-                  <dt>{c.name}</dt>
-                  <dd>
-                    {c.measured!.toLocaleString("en-GB")} <span>{c.measuredUnit}</span>
-                  </dd>
-                  <span className="sf-measexp">expected {c.expected}</span>
-                </div>
+                <MeasuredGauge key={c.id} c={c} />
               ))}
             </div>
           </section>
@@ -234,6 +252,7 @@ export default async function ReportPage({ params }: { params: Promise<{ code: s
                               : res.label}
                           </strong>
                           {c.notes && <span>{c.notes}</span>}
+                          {c.evidence.length > 0 && <Evidence urls={c.evidence} />}
                         </td>
                       </tr>
                     );

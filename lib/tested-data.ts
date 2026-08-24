@@ -11,6 +11,7 @@ export type CpResult = "pass" | "fail" | "na" | "waiting" | "in_progress";
 
 export type Checkpoint = {
   id: string;
+  evidence: string[];
   section: number;
   sectionName: string;
   seq: number;
@@ -21,6 +22,19 @@ export type Checkpoint = {
   notes: string | null;
   measured: number | null;
   measuredUnit: string | null;
+  /** Numeric threshold parsed out of the pre-registered expectation, for the gauge. */
+  threshold: number | null;
+  thresholdDir: "min" | "max" | null;
+};
+
+export type SectionScore = {
+  section: number;
+  name: string;
+  total: number;
+  passed: number;
+  failed: number;
+  na: number;
+  rate: number;
 };
 
 export type ReportSummary = {
@@ -48,8 +62,21 @@ export type ReportSummary = {
 
 export type Report = ReportSummary & {
   checkpoints: Checkpoint[];
+  sections: SectionScore[];
   supersededNote: string | null;
+  /** A better-performing alternative in the same category, if one exists. */
+  alternative: { code: string; product: string; slug: string | null } | null;
 };
+
+/* ">= 500 ml/min" -> 500, "min"; "<= 0.1 micron" -> 0.1, "max" */
+export function parseThreshold(expected: string): { value: number; dir: "min" | "max" } | null {
+  if (!expected) return null;
+  const m = expected.match(/(>=|<=|>|<)\s*([\d.,]+)/);
+  if (!m) return null;
+  const value = Number(m[2].replace(/,/g, ""));
+  if (!Number.isFinite(value)) return null;
+  return { value, dir: m[1].startsWith(">") ? "min" : "max" };
+}
 
 const SESSION_FIELDS =
   "id,test_code,product_id,verdict,status,location,temperature,humidity,planned_minutes," +
@@ -123,6 +150,9 @@ export async function getTestedIndex(): Promise<TestedIndex> {
     .select(SESSION_FIELDS)
     .eq("published", true)
     .eq("status", "completed")
+    // Failures do not appear on the storefront. They are covered on our social
+    // channels instead — "this did not make it onto the site, and here is why".
+    .neq("verdict", "fail")
     .order("completed_at", { ascending: false });
 
   const list: any[] = (sessions as any[]) || [];
@@ -207,6 +237,7 @@ export async function getReport(code: string): Promise<Report | null> {
     .select(SESSION_FIELDS)
     .eq("test_code", code)
     .eq("published", true)
+    .neq("verdict", "fail")
     .maybeSingle();
   if (!raw) return null;
   const s: any = raw;
@@ -219,13 +250,16 @@ export async function getReport(code: string): Promise<Report | null> {
 
   const { data: cpRows } = await sb
     .from("test_checkpoints")
-    .select("id,section,section_name,seq,name,method,expected,result,notes_evidence,measured_value,measured_unit")
+    .select("id,section,section_name,seq,name,method,expected,result,notes_evidence,measured_value,measured_unit,evidence_urls")
     .eq("session_id", s.id)
     .order("section", { ascending: true })
     .order("seq", { ascending: true });
 
-  const checkpoints: Checkpoint[] = (cpRows || []).map((c: any) => ({
+  const checkpoints: Checkpoint[] = (cpRows || []).map((c: any) => {
+    const th = parseThreshold(c.expected || "");
+    return {
     id: c.id,
+    evidence: parseImages(c.evidence_urls),
     section: c.section,
     sectionName: c.section_name,
     seq: c.seq,
@@ -236,7 +270,30 @@ export async function getReport(code: string): Promise<Report | null> {
     notes: c.notes_evidence ?? null,
     measured: c.measured_value === null ? null : Number(c.measured_value),
     measuredUnit: c.measured_unit ?? null,
-  }));
+    threshold: th?.value ?? null,
+    thresholdDir: th?.dir ?? null,
+    };
+  });
+
+  const secMap: Record<number, SectionScore> = {};
+  for (const c of checkpoints) {
+    const sec = (secMap[c.section] ||= {
+      section: c.section,
+      name: c.sectionName,
+      total: 0,
+      passed: 0,
+      failed: 0,
+      na: 0,
+      rate: 0,
+    });
+    sec.total++;
+    if (c.result === "pass") sec.passed++;
+    else if (c.result === "fail") sec.failed++;
+    else if (c.result === "na") sec.na++;
+  }
+  const sections = Object.values(secMap)
+    .map((x) => ({ ...x, rate: x.total ? x.passed / x.total : 0 }))
+    .sort((a, b) => a.section - b.section);
 
   const base = shapeSummary(s, products[s.product_id], cats, {
     total: checkpoints.length,
@@ -245,7 +302,18 @@ export async function getReport(code: string): Promise<Report | null> {
     na: checkpoints.filter((c) => c.result === "na").length,
   });
 
-  return { ...base, checkpoints, supersededNote: s.superseded_note ?? null };
+  // A stronger alternative in the same category, for anything with a caveat.
+  let alternative: Report["alternative"] = null;
+  if (base.verdict !== "pass" || checkpoints.some((c) => c.result === "fail")) {
+    const idx = await getTestedIndex();
+    const better = idx.reports
+      .filter((r) => r.category === base.category && r.code !== base.code && r.verdict === "pass")
+      .sort((a, b) => a.failed - b.failed || b.passed - a.passed)[0];
+    if (better)
+      alternative = { code: better.code, product: better.productName, slug: better.productSlug };
+  }
+
+  return { ...base, checkpoints, sections, supersededNote: s.superseded_note ?? null, alternative };
 }
 
 /** The published protocol — what we run, on everything, every time. */
@@ -268,7 +336,8 @@ export async function getMeasuredByProduct(): Promise<Record<string, { name: str
     .from("test_sessions")
     .select("id,product_id")
     .eq("published", true)
-    .eq("status", "completed");
+    .eq("status", "completed")
+    .neq("verdict", "fail");
   const sessions: any[] = (rawSessions as any[]) || [];
   if (!sessions.length) return {};
   const { data: cps } = await sb

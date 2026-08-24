@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { TestedIndex, ReportSummary } from "@/lib/tested-data";
+import { ScoreRing } from "./report-visuals";
 
 const VERDICT: Record<string, { label: string; tone: string }> = {
   pass: { label: "PASS", tone: "go" },
@@ -17,19 +18,11 @@ function when(iso: string | null): string {
 
 export default function TestedIndexView({ data }: { data: TestedIndex }) {
   const [cat, setCat] = useState<string | null>(null);
-  const [failOnly, setFailOnly] = useState(false);
 
   const shown = useMemo(
-    () =>
-      data.reports.filter((r) => {
-        if (cat && r.category !== cat) return false;
-        if (failOnly && r.verdict !== "fail") return false;
-        return true;
-      }),
-    [data.reports, cat, failOnly]
+    () => data.reports.filter((r) => !cat || r.category === cat),
+    [data.reports, cat]
   );
-
-  const failed = data.reports.filter((r) => r.verdict === "fail");
   const comps = cat ? data.comparisons.filter((c) => c.category === cat) : data.comparisons;
 
   if (!data.reports.length) {
@@ -53,12 +46,13 @@ export default function TestedIndexView({ data }: { data: TestedIndex }) {
       <div className="sf-catwrap">
         <header className="sf-cathead wide">
           <div className="sf-hz-kicker">Tested Reports</div>
-          <h1>We publish what we found, including what failed.</h1>
+          <h1>Nothing reaches this shop without earning it.</h1>
           <p>
-            Every product runs the same protocol. We write down what we expect{" "}
-            <strong>before we open the box</strong>, then publish every checkpoint — the method, the
-            expectation, the result, and what we actually saw. No stars, no sponsored verdicts, and
-            the failures stay up.
+            Every product runs the same protocol — the same checkpoints, in the same order, under
+            recorded conditions. We write down what we expect{" "}
+            <strong>before we open the box</strong>, then publish every result: the method, the
+            expectation, and what actually happened. No stars and no sponsored verdicts. What did
+            not make it never appears here at all.
           </p>
         </header>
 
@@ -71,9 +65,9 @@ export default function TestedIndexView({ data }: { data: TestedIndex }) {
             <strong>{data.stats.checkpoints.toLocaleString("en-GB")}</strong>
             <span>checkpoints run and published</span>
           </div>
-          <div className="warn">
-            <strong>{data.stats.failed}</strong>
-            <span>failed our protocol</span>
+          <div>
+            <strong>{data.categories.length}</strong>
+            <span>categories with a published protocol</span>
           </div>
           <Link href="/admin/site/tested/protocol" className="sf-tprotolink">
             Read the full protocol →
@@ -83,11 +77,8 @@ export default function TestedIndexView({ data }: { data: TestedIndex }) {
         <div className="sf-hz-controls">
           <button
             type="button"
-            className={`sf-hz-layer alt${cat === null && !failOnly ? " on" : ""}`}
-            onClick={() => {
-              setCat(null);
-              setFailOnly(false);
-            }}
+            className={`sf-hz-layer alt${cat === null ? " on" : ""}`}
+            onClick={() => setCat(null)}
           >
             All reports
           </button>
@@ -101,13 +92,6 @@ export default function TestedIndexView({ data }: { data: TestedIndex }) {
               {c}
             </button>
           ))}
-          <button
-            type="button"
-            className={`sf-hz-layer alt${failOnly ? " on" : ""}`}
-            onClick={() => setFailOnly((v) => !v)}
-          >
-            Failures only ({failed.length})
-          </button>
         </div>
 
         {/* ---------- head-to-head ---------- */}
@@ -120,13 +104,16 @@ export default function TestedIndexView({ data }: { data: TestedIndex }) {
               never changes.
             </p>
             {comps.map((c) => {
-              const best = Math.max(...c.rows.map((r) => Math.abs(r.value)), 1);
+              const th = c.expected.match(/(?:>=|<=|>|<)\s*([\d.,]+)/);
+              const thVal = th ? Number(th[1].replace(/,/g, "")) : null;
+              const best = Math.max(...c.rows.map((r) => Math.abs(r.value)), thVal ?? 0, 1) * 1.12;
               return (
                 <div key={`${c.category}-${c.metric}`} className="sf-h2h">
                   <div className="sf-h2hhead">
                     <strong>{c.metric}</strong>
                     <span>
-                      {c.category} · expected {c.expected}
+                      {c.category} · marker shows the threshold we set before testing:{" "}
+                      {c.expected}
                     </span>
                   </div>
                   {c.rows.map((r) => (
@@ -139,6 +126,13 @@ export default function TestedIndexView({ data }: { data: TestedIndex }) {
                           className={`sf-h2hbar v-${r.verdict ?? "pass"}`}
                           style={{ width: `${Math.max(2, (Math.abs(r.value) / best) * 100)}%` }}
                         />
+                        {thVal !== null && (
+                          <div
+                            className="sf-h2hth"
+                            style={{ left: `${Math.min(99, (thVal / best) * 100)}%` }}
+                            title={`Expected ${c.expected}`}
+                          />
+                        )}
                       </div>
                       <span className="sf-h2hval">
                         {r.value.toLocaleString("en-GB")} {c.unit}
@@ -148,28 +142,6 @@ export default function TestedIndexView({ data }: { data: TestedIndex }) {
                 </div>
               );
             })}
-          </section>
-        )}
-
-        {/* ---------- the failure wall ---------- */}
-        {failed.length > 0 && !failOnly && (
-          <section className="sf-failwall">
-            <h2>What failed</h2>
-            <p>
-              These did not pass. We are leaving them up, because a shop that only publishes its
-              successes is not telling you anything.
-            </p>
-            <div className="sf-failgrid">
-              {failed.map((r) => (
-                <Link key={r.code} href={`/admin/site/tested/${r.code}`} className="sf-failcard">
-                  <strong>{r.productName}</strong>
-                  <span className="sf-failcount">
-                    {r.failed} of {r.total} checkpoints failed
-                  </span>
-                  <span className="sf-failwhy">{r.summary}</span>
-                </Link>
-              ))}
-            </div>
           </section>
         )}
 
@@ -196,15 +168,13 @@ function ReportCard({ r }: { r: ReportSummary }) {
           <span className="sf-noimg">No image yet</span>
         )}
         <span className={`sf-state t-${v.tone}`}>{v.label}</span>
+        <div className="sf-tcardring">
+          <ScoreRing passed={r.passed} failed={r.failed} na={r.na} verdict={r.verdict} size={62} />
+        </div>
       </div>
       <div className="sf-tcardbody">
         {r.brand && <span className="sf-cardbrand">{r.brand}</span>}
         <strong>{r.productName}</strong>
-        <div className="sf-tcardscore">
-          <span className="ok">{r.passed} passed</span>
-          {r.failed > 0 && <span className="bad">{r.failed} failed</span>}
-          {r.na > 0 && <span>{r.na} n/a</span>}
-        </div>
         {r.summary && <p>{r.summary}</p>}
         <div className="sf-tcardmeta">
           <span>{r.code}</span>
