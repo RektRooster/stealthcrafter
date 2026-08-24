@@ -73,7 +73,7 @@ export async function fetchGdacs(): Promise<{ events: HazardEvent[]; status: Sou
     const alert = (tag(item, "gdacs:alertlevel") || "green").toLowerCase();
     const eventId = tag(item, "gdacs:eventid") || "";
     const episode = tag(item, "gdacs:episodeid") || "";
-    const country = decode(tag(item, "gdacs:country") || "");
+    const countryRaw = decode(tag(item, "gdacs:country") || "");
     const from = tag(item, "gdacs:fromdate");
     const sevText = decode(tag(item, "gdacs:severity") || "");
     const sevValue = Number(attr(item, "gdacs:severity", "value"));
@@ -81,35 +81,49 @@ export async function fetchGdacs(): Promise<{ events: HazardEvent[]; status: Sou
     const popValue = Number(attr(item, "gdacs:population", "value"));
     const popText = decode(tag(item, "gdacs:population") || "");
     const link = decode(tag(item, "link") || "") || null;
+    const span = bboxSpan(tag(item, "gdacs:bbox") || "");
+
+    const started = new Date(parseDate(from));
+    const ageDays = (Date.now() - started.getTime()) / 864e5;
+    // GDACS keeps slow-onset episodes current for months. They are real, but a
+    // year-old drought is not what a "right now" map is for.
+    if (ageDays > 180) continue;
 
     // GDACS's own alert level is the primary signal — it already folds in
     // exposure. We only add a floor: anything with a large exposed population
-    // is at least "elevated" even if GDACS still has it green.
+    // is at least "worth knowing" even if GDACS still has it green.
     let severity: Severity = alert === "red" ? "severe" : alert === "orange" ? "elevated" : alert === "yellow" ? "watch" : "info";
     if (Number.isFinite(popValue) && popValue >= 1_000_000 && severity === "info") severity = "watch";
+    // Long-running events are already known and already being managed.
+    if (ageDays > 30 && severity !== "info") severity = down(severity);
 
+    // Continental-scale events are listed but never pinned: a point marker
+    // would claim a precision the bounding box does not have.
+    const wide = span !== null && span > 12;
+    const { label: where, count: countryCount } = shortCountries(countryRaw);
     const label = KIND_LABEL[code] || "Event";
-    const where = country || "Europe / Mediterranean";
 
     events.push({
       id: `GDACS:${eventId || `${lat},${lon}`}${episode ? `.${episode}` : ""}`,
       source: "GDACS",
       kind,
-      title: `${label} — ${where}`,
+      title: `${label} — ${wide && countryCount > 3 ? `${countryCount} European countries` : where}`,
       summary:
+        (ageDays > 14 ? `Ongoing since ${fmtDate(started)}. ` : "") +
         [sevText, popText ? `Exposed population: ${popText.replace(/^\s*/, "")}` : ""]
           .filter(Boolean)
           .join(". ")
           .trim() +
-        `. GDACS alert level: ${cap(alert)}.`,
+        `. GDACS alert level: ${cap(alert)}.` +
+        (wide ? ` Spans ${where} — too wide to place on the map as a single point.` : ""),
       lat,
       lon,
-      xy: projectLonLat(lon, lat),
-      countryIso2: countryOf(lon, lat),
+      xy: wide ? null : projectLonLat(lon, lat),
+      countryIso2: wide ? null : countryOf(lon, lat),
       severity,
       magnitude: Number.isFinite(sevValue) ? sevValue : null,
       unit: sevUnit || null,
-      at: parseDate(from),
+      at: started.toISOString(),
       url: link,
       pillars: PILLARS_BY_KIND[kind],
     });
@@ -152,6 +166,34 @@ function decode(s: string): string {
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, "&")
     .trim();
+}
+
+/* GDACS bbox is "minlon maxlon minlat maxlat". A continental-scale event —
+   a drought across twenty countries — must not be pinned to a single point,
+   so we measure the span and refuse to plot the wide ones. */
+function bboxSpan(raw: string): number | null {
+  const n = raw.trim().split(/\s+/).map(Number);
+  if (n.length !== 4 || n.some((v) => !Number.isFinite(v))) return null;
+  return Math.max(Math.abs(n[1] - n[0]), Math.abs(n[3] - n[2]));
+}
+
+const ORDER: Severity[] = ["info", "watch", "elevated", "severe"];
+function down(sev: Severity): Severity {
+  return ORDER[Math.max(0, ORDER.indexOf(sev) - 1)];
+}
+
+/* "Germany, Spain, France and 17 others" rather than a wall of country names. */
+function shortCountries(raw: string): { label: string; count: number } {
+  const parts = raw
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (parts.length <= 3) return { label: parts.join(", ") || "Europe / Mediterranean", count: parts.length };
+  return { label: `${parts.slice(0, 3).join(", ")} and ${parts.length - 3} others`, count: parts.length };
+}
+
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 function cap(s: string): string {

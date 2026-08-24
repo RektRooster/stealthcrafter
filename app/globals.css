@@ -3377,7 +3377,7 @@ table.cc-comp-flagtable { min-width: 760px; }
   color: #a2acb6; margin-bottom: 8px;
 }
 .sf-hz-list {
-  list-style: none; margin: 0; padding: 0;
+  list-style: none; margin: 0; padding: 0; position: relative;
   max-height: 560px; overflow-y: auto; overflow-x: hidden;
   border: 1px solid rgba(255,255,255,.14); border-radius: 7px;
 }

@@ -94,6 +94,7 @@ export default function HazardMap({
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<View>(FULL);
   const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
+  const listRef = useRef<HTMLUListElement | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const animRef = useRef<number | null>(null);
@@ -196,8 +197,18 @@ export default function HazardMap({
       setSelected(e.id);
       setActive(e.id);
       if (fly) zoomToEvent(e);
+      // Scroll the LIST, never the page. scrollIntoView walks up and scrolls
+      // every scrollable ancestor, which threw the reader past the site nav
+      // with no obvious way back.
       window.setTimeout(() => {
-        itemRefs.current[e.id]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        const list = listRef.current;
+        const item = itemRefs.current[e.id];
+        if (!list || !item) return;
+        const top = item.offsetTop;
+        const bottom = top + item.offsetHeight;
+        if (top < list.scrollTop) list.scrollTo({ top, behavior: "smooth" });
+        else if (bottom > list.scrollTop + list.clientHeight)
+          list.scrollTo({ top: bottom - list.clientHeight, behavior: "smooth" });
       }, 60);
     },
     [zoomToEvent]
@@ -476,7 +487,8 @@ export default function HazardMap({
                   onClick={(ev) => {
                     ev.stopPropagation();
                     if (suppressClick.current) return;
-                    selectEvent(e);
+                    // No fly-to: you are already looking at this marker.
+                    selectEvent(e, false);
                   }}
                 >
                   {isSel && <circle r={big ? 21 : 18} className="sf-hz-selring" />}
@@ -635,7 +647,7 @@ export default function HazardMap({
             {country ? `${countryName} — ${shown.length} events` : `${shown.length} events across Europe`}
           </div>
 
-          <ul className="sf-hz-list">
+          <ul className="sf-hz-list" ref={listRef}>
             {shown.slice(0, 40).map((e) => (
               <li
                 key={e.id}
