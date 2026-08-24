@@ -1,20 +1,20 @@
-import SfPlaceholder from "../sf-placeholder";
+import { getTestedIndex } from "@/lib/tested-data";
+import TestedIndexView from "./tested-index";
 
-export default function StorefrontTestedPage() {
-  return (
-    <SfPlaceholder
-      title="Tested Reports"
-      description={
-        <>
-          At launch these are the public trust proof behind the
-          &ldquo;StealthCrafter Tested&rdquo; badge: individual testing reports
-          that remain publicly viewable even though the full browsable
-          catalogue is member-gated — never gating the evidence a prospective
-          customer needs to trust us. Every badge on a product links to the
-          report behind it.
-        </>
-      }
-      feed="Fed by the Test Lab (SC 01 testing programme) — sessions, checkpoints and verdicts recorded in the admin Testing module."
-    />
-  );
+export const dynamic = "force-dynamic";
+
+export default async function TestedPage() {
+  const data = await getTestedIndex();
+  if (!data.configured) {
+    return (
+      <main className="sf-page">
+        <div className="sf-inner">
+          <div className="cc-notice">
+            <strong>Tested Reports are offline.</strong> Supabase is not configured.
+          </div>
+        </div>
+      </main>
+    );
+  }
+  return <TestedIndexView data={data} />;
 }

@@ -12,7 +12,7 @@ import {
 import type { Household, KitItem, Pillar, Scenario, SimResult } from "@/lib/kit/sim";
 import { OFFICIAL_LISTS, SCENARIOS } from "@/lib/kit/scenarios";
 
-type CatItem = KitItem & { image: string | null; hero: boolean; pillar: string | null };
+type CatItem = KitItem & { image: string | null; hero: boolean; pillar: string | null; measured?: boolean };
 
 type Props = {
   catalogue: CatItem[];
@@ -365,7 +365,11 @@ export default function KitBuilder({ catalogue, liveHints }: Props) {
                     <span className="sf-recmeta">
                       {r.item.category}
                       {r.item.weightKg ? ` · ${r.item.weightKg.toFixed(2)} kg` : ""}
-                      {r.item.attrs.basis === "typical" ? " · capacity estimated" : ""}
+                      {(r.item as CatItem).measured
+                        ? " · measured by us"
+                        : r.item.attrs.basis === "typical"
+                        ? " · capacity estimated"
+                        : ""}
                     </span>
                   </div>
                   <button type="button" className="sf-recadd" onClick={() => add(r.item)}>
