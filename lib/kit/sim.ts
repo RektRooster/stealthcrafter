@@ -113,10 +113,13 @@ export function computeDemand(h: Household, s: Scenario, items: KitItem[]): Dema
   if (s.tempC < 5 && s.gridDown) kcal *= 1.15; // shivering costs
   kcal *= s.exertion;
 
-  // Heat: one warm room, only when the grid is down and it is actually cold.
+  // Heat. A home does not fall to outdoor temperature the moment the boiler
+  // stops: the building's thermal mass and the people inside it hold roughly
+  // 6°C above outside, and insulation adds to that. Below 12°C indoors is where
+  // cold stops being uncomfortable and starts being dangerous.
   const insulationC = insulationFrom(items, people);
-  const effectiveTemp = s.tempC + insulationC;
-  const heatKwhPerDay = s.gridDown && effectiveTemp < 16 ? (16 - effectiveTemp) * 0.55 : 0;
+  const passiveIndoorC = s.tempC + 6 + insulationC;
+  const heatKwhPerDay = s.gridDown && passiveIndoorC < 12 ? (12 - passiveIndoorC) * 0.55 : 0;
 
   // Power: lighting, phones, radio, plus any powered medical equipment.
   let whPerDay = s.gridDown ? 35 + 12 * people : 0;
@@ -249,16 +252,24 @@ export function simulate(h: Household, s: Scenario, items: KitItem[]): SimResult
     },
     {
       pillar: "heat",
-      runwayHours: runway(supply.heatKwh, demand.heatKwhPerDay),
+      // Insulation buys hours whether or not you have fuel — a household with
+      // sleeping bags and no stove is not at zero, it is on borrowed time.
+      // Fuel extends that; it does not replace it.
+      runwayHours:
+        demand.heatKwhPerDay <= 0
+          ? Infinity
+          : demand.insulationC * 8 + runway(supply.heatKwh, demand.heatKwhPerDay),
       coverage: 0,
       supplyLabel:
         demand.heatKwhPerDay <= 0
-          ? "No heating demand in this scenario"
-          : `${supply.heatKwh.toFixed(1)} kWh of fuel`,
+          ? "Warm enough without a heat source in this scenario"
+          : supply.heatKwh > 0
+          ? `${supply.heatKwh.toFixed(1)} kWh of fuel, plus ${Math.round(demand.insulationC * 8)} h from insulation`
+          : `No heating fuel — ${Math.round(demand.insulationC * 8)} h of cover from insulation alone`,
       demandLabel:
         demand.heatKwhPerDay <= 0
           ? "—"
-          : `${demand.heatKwhPerDay.toFixed(1)} kWh/day · insulation removes ${demand.insulationC.toFixed(1)}°C`,
+          : `${demand.heatKwhPerDay.toFixed(1)} kWh/day to hold 12°C indoors · insulation adds ${demand.insulationC.toFixed(1)}°C`,
     },
     {
       pillar: "power",
