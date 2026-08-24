@@ -243,10 +243,21 @@ export function DepletionTimeline({
     <svg viewBox={`0 0 ${width} ${height}`} className="sf-depl" role="img" aria-label="How long each pillar lasts">
       <defs>
         {rows.map((r) => (
-          <linearGradient key={r.pillar} id={`dl-${uid}-${safeId(r.pillar)}`} x1="0" x2="1">
-            <stop offset="0%" stopColor={PILLAR_COLOR[r.pillar] ?? "#c6a15b"} stopOpacity="0.95" />
-            <stop offset="82%" stopColor={PILLAR_COLOR[r.pillar] ?? "#c6a15b"} stopOpacity="0.55" />
-            <stop offset="100%" stopColor={PILLAR_COLOR[r.pillar] ?? "#c6a15b"} stopOpacity="0" />
+          /* userSpaceOnUse, because a <line> has a zero-height bounding box and
+             the default objectBoundingBox units are degenerate for one — which
+             is why every line rendered grey. Each fades out at its own end. */
+          <linearGradient
+            key={r.pillar}
+            id={`dl-${uid}-${safeId(r.pillar)}`}
+            gradientUnits="userSpaceOnUse"
+            x1={padL}
+            y1={0}
+            x2={Math.max(padL + 12, x(r.hours))}
+            y2={0}
+          >
+            <stop offset="0%" stopColor={PILLAR_COLOR[r.pillar] ?? "#c6a15b"} stopOpacity="1" />
+            <stop offset="78%" stopColor={PILLAR_COLOR[r.pillar] ?? "#c6a15b"} stopOpacity="0.75" />
+            <stop offset="100%" stopColor={PILLAR_COLOR[r.pillar] ?? "#c6a15b"} stopOpacity="0.15" />
           </linearGradient>
         ))}
       </defs>
