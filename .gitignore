@@ -4,3 +4,6 @@ node_modules
 .env*
 *.log
 *.tsbuildinfo
+
+# Deploy transfer artefacts (patches relayed to the device for pushing)
+*.patch
