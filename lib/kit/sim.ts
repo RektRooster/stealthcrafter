@@ -1,0 +1,478 @@
+// KIT BUILDER — the survival simulator.
+//
+// Deterministic, pure, and fast enough to re-run on every click. It models a
+// household consuming resources hour by hour under a scenario, and reports the
+// hour each pillar fails. That failure clock is the whole product: "Preparedness
+// 68/100" means nothing, "your water runs out at hour 61 of a 72-hour event"
+// means everything.
+//
+// Two kinds of item matter, and keeping them separate is what makes the model
+// feel real: some SUPPLY a resource (a 20L container, a 2400 kcal ration), and
+// some REDUCE DEMAND (a four-season sleeping bag does not generate heat — it
+// lowers the amount you need).
+
+import type { KitAttrs } from "./attributes";
+
+export type Household = {
+  adults: number;
+  children: number; // 4–17
+  infants: number; // under 4
+  pets: number;
+  /** Someone dependent on powered medical equipment. */
+  medicalPower: boolean;
+  countryIso2: string;
+};
+
+export type Scenario = {
+  id: string;
+  label: string;
+  summary: string;
+  hours: number;
+  /** Outdoor temperature driving heat demand. */
+  tempC: number;
+  gridDown: boolean;
+  mainsWaterDown: boolean;
+  evacuation: boolean;
+  /** Carry limit applies, and only what you can grab counts. */
+  noticeHours?: number;
+  /** Physical exertion multiplier on water and calories. */
+  exertion: number;
+  hazardHint?: string;
+};
+
+export type Pillar = "water" | "food" | "heat" | "power" | "light" | "medical";
+
+export const PILLARS: Pillar[] = ["water", "food", "heat", "power", "light", "medical"];
+
+export const PILLAR_LABEL: Record<Pillar, string> = {
+  water: "Water",
+  food: "Food",
+  heat: "Warmth",
+  power: "Power",
+  light: "Light",
+  medical: "Medical",
+};
+
+export type KitItem = {
+  id: string;
+  slug: string;
+  name: string;
+  brand: string | null;
+  category: string;
+  price: number | null;
+  weightKg: number | null;
+  shelfMonths: number | null;
+  attrs: KitAttrs;
+  qty: number;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Demand                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export type Demand = {
+  waterLPerDay: number;
+  kcalPerDay: number;
+  heatKwhPerDay: number;
+  whPerDay: number;
+  lumenHoursPerDay: number;
+  /** Degrees of heating demand removed by insulation already in the kit. */
+  insulationC: number;
+  people: number;
+};
+
+/** Sum of insulation, with diminishing returns — a fifth blanket adds little. */
+function insulationFrom(items: KitItem[], people: number): number {
+  const values: number[] = [];
+  for (const it of items) {
+    const c = it.attrs.insulationC;
+    if (!c) continue;
+    for (let i = 0; i < it.qty; i++) values.push(c);
+  }
+  values.sort((a, b) => b - a);
+  // Only the best `people` items really count; the rest contribute a tail.
+  let total = 0;
+  values.forEach((v, i) => {
+    total += i < people ? v : v * 0.15;
+  });
+  return Math.min(total, 22);
+}
+
+export function computeDemand(h: Household, s: Scenario, items: KitItem[]): Demand {
+  const people = h.adults + h.children + h.infants;
+
+  // Water: WHO planning figure is 3 L/person/day for drinking and basic
+  // hygiene, uprated for heat and exertion.
+  let waterPer = 3.0 * h.adults + 2.0 * h.children + 1.2 * h.infants + 0.7 * h.pets;
+  if (s.tempC > 25) waterPer *= 1.5;
+  else if (s.tempC > 20) waterPer *= 1.2;
+  waterPer *= s.exertion;
+
+  // Calories.
+  let kcal = 2200 * h.adults + 1500 * h.children + 700 * h.infants;
+  if (s.tempC < 5 && s.gridDown) kcal *= 1.15; // shivering costs
+  kcal *= s.exertion;
+
+  // Heat: one warm room, only when the grid is down and it is actually cold.
+  const insulationC = insulationFrom(items, people);
+  const effectiveTemp = s.tempC + insulationC;
+  const heatKwhPerDay = s.gridDown && effectiveTemp < 16 ? (16 - effectiveTemp) * 0.55 : 0;
+
+  // Power: lighting, phones, radio, plus any powered medical equipment.
+  let whPerDay = s.gridDown ? 35 + 12 * people : 0;
+  if (h.medicalPower && s.gridDown) whPerDay += 240;
+
+  // Light: five dark hours at a usable level, per occupied space.
+  const lumenHoursPerDay = s.gridDown ? 5 * 220 * Math.max(1, Math.ceil(people / 3)) : 0;
+
+  return {
+    waterLPerDay: waterPer,
+    kcalPerDay: kcal,
+    heatKwhPerDay,
+    whPerDay,
+    lumenHoursPerDay,
+    insulationC,
+    people,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Supply                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export type Supply = {
+  waterL: number;
+  kcal: number;
+  heatKwh: number;
+  wh: number;
+  whPerDay: number;
+  lumenHours: number;
+  medicalTags: Set<string>;
+  shelterPersons: number;
+};
+
+export function computeSupply(items: KitItem[]): Supply {
+  const s: Supply = {
+    waterL: 0,
+    kcal: 0,
+    heatKwh: 0,
+    wh: 0,
+    whPerDay: 0,
+    lumenHours: 0,
+    medicalTags: new Set(),
+    shelterPersons: 0,
+  };
+  for (const it of items) {
+    const a = it.attrs;
+    const q = it.qty;
+    // Treatment capacity only helps if there is a source to treat; in a mains
+    // outage there generally is (rain, tanks, watercourses), so it counts —
+    // but heavily discounted against stored water you can simply drink.
+    s.waterL += (a.waterStoreL ?? 0) * q + Math.min((a.waterTreatL ?? 0) * q, 400) * 0.5;
+    s.kcal += (a.kcal ?? 0) * q;
+    s.heatKwh += (a.heatKwh ?? 0) * q;
+    s.wh += (a.wh ?? 0) * q;
+    s.whPerDay += (a.whPerDay ?? 0) * q;
+    s.lumenHours += (a.lumenHours ?? 0) * q;
+    s.shelterPersons += (a.shelterPersons ?? 0) * q;
+    a.medical?.forEach((t) => s.medicalTags.add(t));
+  }
+  return s;
+}
+
+/* -------------------------------------------------------------------------- */
+/* The simulation                                                              */
+/* -------------------------------------------------------------------------- */
+
+export type PillarResult = {
+  pillar: Pillar;
+  /** Hours until this pillar is exhausted. Infinity when there is no demand. */
+  runwayHours: number;
+  /** 0–1 against the scenario length. */
+  coverage: number;
+  supplyLabel: string;
+  demandLabel: string;
+  /** Non-depleting pillars (medical) report a coverage score instead. */
+  note?: string;
+};
+
+export type SimResult = {
+  demand: Demand;
+  supply: Supply;
+  pillars: PillarResult[];
+  /** The floor rule: the household is only as ready as its weakest pillar. */
+  failureHour: number;
+  weakest: Pillar;
+  scenarioHours: number;
+  survived: boolean;
+  totalWeightKg: number;
+  totalCost: number;
+};
+
+const MED_REQUIRED = ["trauma", "wound-care", "pain", "antisepsis", "gi-hydration", "burns"];
+
+function runway(stock: number, perDay: number): number {
+  if (perDay <= 0) return Infinity;
+  if (stock <= 0) return 0;
+  return (stock / perDay) * 24;
+}
+
+export function simulate(h: Household, s: Scenario, items: KitItem[]): SimResult {
+  const demand = computeDemand(h, s, items);
+  const supply = computeSupply(items);
+
+  // Power: batteries plus whatever can be regenerated each day.
+  const powerRunway =
+    demand.whPerDay <= 0
+      ? Infinity
+      : supply.whPerDay >= demand.whPerDay
+      ? Infinity
+      : runway(supply.wh, demand.whPerDay - supply.whPerDay);
+
+  const medCovered = MED_REQUIRED.filter((t) => supply.medicalTags.has(t)).length;
+  const medCoverage = medCovered / MED_REQUIRED.length;
+
+  const pillars: PillarResult[] = [
+    {
+      pillar: "water",
+      runwayHours: runway(supply.waterL, demand.waterLPerDay),
+      coverage: 0,
+      supplyLabel: `${supply.waterL.toFixed(1)} L available`,
+      demandLabel: `${demand.waterLPerDay.toFixed(1)} L/day needed`,
+    },
+    {
+      pillar: "food",
+      runwayHours: runway(supply.kcal, demand.kcalPerDay),
+      coverage: 0,
+      supplyLabel: `${Math.round(supply.kcal).toLocaleString("en-GB")} kcal stored`,
+      demandLabel: `${Math.round(demand.kcalPerDay).toLocaleString("en-GB")} kcal/day needed`,
+    },
+    {
+      pillar: "heat",
+      runwayHours: runway(supply.heatKwh, demand.heatKwhPerDay),
+      coverage: 0,
+      supplyLabel:
+        demand.heatKwhPerDay <= 0
+          ? "No heating demand in this scenario"
+          : `${supply.heatKwh.toFixed(1)} kWh of fuel`,
+      demandLabel:
+        demand.heatKwhPerDay <= 0
+          ? "—"
+          : `${demand.heatKwhPerDay.toFixed(1)} kWh/day · insulation removes ${demand.insulationC.toFixed(1)}°C`,
+    },
+    {
+      pillar: "power",
+      runwayHours: powerRunway,
+      coverage: 0,
+      supplyLabel:
+        supply.whPerDay > 0
+          ? `${Math.round(supply.wh)} Wh stored + ${Math.round(supply.whPerDay)} Wh/day generated`
+          : `${Math.round(supply.wh)} Wh stored`,
+      demandLabel: demand.whPerDay <= 0 ? "—" : `${Math.round(demand.whPerDay)} Wh/day needed`,
+    },
+    {
+      pillar: "light",
+      runwayHours: runway(supply.lumenHours, demand.lumenHoursPerDay),
+      coverage: 0,
+      supplyLabel: `${Math.round(supply.lumenHours).toLocaleString("en-GB")} lumen-hours`,
+      demandLabel:
+        demand.lumenHoursPerDay <= 0
+          ? "—"
+          : `${Math.round(demand.lumenHoursPerDay).toLocaleString("en-GB")} lm·h/day needed`,
+    },
+    {
+      pillar: "medical",
+      // Medical does not deplete — it is either covered or it is not. A kit
+      // missing whole categories fails from hour zero for that need.
+      runwayHours: medCoverage >= 0.999 ? Infinity : medCoverage <= 0 ? 0 : s.hours * medCoverage,
+      coverage: medCoverage,
+      supplyLabel: `${medCovered} of ${MED_REQUIRED.length} core capabilities`,
+      demandLabel: MED_REQUIRED.filter((t) => !supply.medicalTags.has(t)).join(", ") || "complete",
+      note:
+        medCoverage >= 0.999
+          ? "Every core capability is present."
+          : `Missing: ${MED_REQUIRED.filter((t) => !supply.medicalTags.has(t)).join(", ")}`,
+    },
+  ];
+
+  for (const p of pillars) {
+    p.coverage = Math.max(0, Math.min(1, p.runwayHours / s.hours));
+  }
+
+  // The floor rule from SC 03: the household is capped by its worst pillar.
+  let failureHour = Infinity;
+  let weakest: Pillar = "water";
+  for (const p of pillars) {
+    if (p.runwayHours < failureHour) {
+      failureHour = p.runwayHours;
+      weakest = p.pillar;
+    }
+  }
+
+  const totalWeightKg = items.reduce((t, i) => t + (i.weightKg ?? 0) * i.qty, 0);
+  const totalCost = items.reduce((t, i) => t + (i.price ?? 0) * i.qty, 0);
+
+  return {
+    demand,
+    supply,
+    pillars,
+    failureHour,
+    weakest,
+    scenarioHours: s.hours,
+    survived: failureHour >= s.hours,
+    totalWeightKg,
+    totalCost,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Marginal value — "what is the best next €40?"                               */
+/* -------------------------------------------------------------------------- */
+
+export type Recommendation = {
+  item: KitItem;
+  /** Hours added to the household failure clock. */
+  hoursGained: number;
+  hoursPerEuro: number;
+  pillar: Pillar;
+  reason: string;
+};
+
+/**
+ * Demand is constant per hour in this model, so the effect of adding capacity
+ * is exact arithmetic rather than a re-simulation — which is what lets the
+ * whole catalogue be ranked instantly on every change.
+ */
+export function recommend(
+  h: Household,
+  s: Scenario,
+  kit: KitItem[],
+  candidates: KitItem[],
+  limit = 8
+): Recommendation[] {
+  const base = simulate(h, s, kit);
+  const inKit = new Set(kit.map((i) => i.id));
+  const out: Recommendation[] = [];
+
+  for (const c of candidates) {
+    if (inKit.has(c.id)) continue;
+    const price = c.price ?? 0;
+    if (price <= 0) continue;
+
+    const next = simulate(h, s, [...kit, { ...c, qty: 1 }]);
+    const before = Math.min(base.failureHour, s.hours * 3);
+    const after = Math.min(next.failureHour, s.hours * 3);
+    const gained = after - before;
+    if (gained <= 0.25) continue;
+
+    out.push({
+      item: { ...c, qty: 1 },
+      hoursGained: gained,
+      hoursPerEuro: gained / price,
+      pillar: base.weakest,
+      reason: reasonFor(c, base.weakest),
+    });
+  }
+
+  out.sort((a, b) => b.hoursPerEuro - a.hoursPerEuro);
+  return out.slice(0, limit);
+}
+
+function reasonFor(c: KitItem, weakest: Pillar): string {
+  const a = c.attrs;
+  switch (weakest) {
+    case "water":
+      if (a.waterStoreL) return `Adds ${a.waterStoreL} L of stored water`;
+      if (a.waterTreatL) return `Treats up to ${a.waterTreatL.toLocaleString("en-GB")} L`;
+      break;
+    case "food":
+      if (a.kcal) return `Adds ${Math.round(a.kcal).toLocaleString("en-GB")} kcal`;
+      break;
+    case "heat":
+      if (a.heatKwh) return `Adds ${a.heatKwh.toFixed(1)} kWh of fuel`;
+      if (a.insulationC) return `Cuts heating demand by ${a.insulationC}°C`;
+      break;
+    case "power":
+      if (a.wh) return `Adds ${Math.round(a.wh)} Wh of stored power`;
+      if (a.whPerDay) return `Generates ${Math.round(a.whPerDay)} Wh/day`;
+      break;
+    case "light":
+      if (a.lumenHours) return `Adds ${Math.round(a.lumenHours).toLocaleString("en-GB")} lumen-hours`;
+      break;
+    case "medical":
+      if (a.medical?.length) return `Covers ${a.medical.join(", ")}`;
+      break;
+  }
+  return "Improves your weakest pillar";
+}
+
+/* -------------------------------------------------------------------------- */
+/* Single points of failure                                                    */
+/* -------------------------------------------------------------------------- */
+
+export type Spof = { fuel: string; share: number; count: number; pillar: string };
+
+const FUEL_LABEL: Record<string, string> = {
+  butane: "butane / isobutane canisters",
+  spirit: "methylated spirit",
+  solid: "solid fuel tablets",
+  wood: "burnable wood",
+  "liquid-fuel": "liquid fuel",
+  aa: "AA cells",
+  aaa: "AAA cells",
+  "18650": "18650 / 21700 cells",
+  cr123: "CR123A cells",
+  usb: "USB recharging",
+  solar: "solar generation",
+  mains: "mains electricity",
+};
+
+export function findSpofs(items: KitItem[]): Spof[] {
+  const heat = items.filter((i) => (i.attrs.heatKwh ?? 0) > 0 || (i.attrs.burnHours ?? 0) > 0);
+  const power = items.filter((i) => (i.attrs.wh ?? 0) > 0 || (i.attrs.lumenHours ?? 0) > 0);
+  const out: Spof[] = [];
+
+  for (const [group, label] of [
+    [heat, "heat and cooking"],
+    [power, "power and light"],
+  ] as [KitItem[], string][]) {
+    if (group.length < 2) continue;
+    const byFuel: Record<string, number> = {};
+    for (const i of group) {
+      const f = i.attrs.fuel;
+      if (!f || f === "none") continue;
+      byFuel[f] = (byFuel[f] || 0) + 1;
+    }
+    for (const [fuel, count] of Object.entries(byFuel)) {
+      const share = count / group.length;
+      if (share >= 0.6 && count >= 2) {
+        out.push({ fuel: FUEL_LABEL[fuel] || fuel, share, count, pillar: label });
+      }
+    }
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Decay — the kit ages                                                        */
+/* -------------------------------------------------------------------------- */
+
+export type DecayPoint = { month: number; failureHour: number; expiring: string[] };
+
+export function projectDecay(
+  h: Household,
+  s: Scenario,
+  kit: KitItem[],
+  months = 36
+): DecayPoint[] {
+  const out: DecayPoint[] = [];
+  for (let m = 0; m <= months; m += 3) {
+    const alive = kit.filter((i) => i.shelfMonths === null || i.shelfMonths > m);
+    const expiring = kit
+      .filter((i) => i.shelfMonths !== null && i.shelfMonths <= m && i.shelfMonths > m - 3)
+      .map((i) => i.name);
+    const r = simulate(h, s, alive);
+    out.push({ month: m, failureHour: Math.min(r.failureHour, s.hours * 2), expiring });
+  }
+  return out;
+}
