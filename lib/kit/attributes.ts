@@ -188,12 +188,12 @@ export function deriveAttrs(p: AttrInput): KitAttrs {
   }
 
   /* ---------------- FOOD ---------------- */
-  if (cat === "Food" || /ration|meal|food|kcal|calorie/i.test(n)) {
+  if (cat === "Food" || /\bration\b|\bmeal\b|\bfood\b|\bkcal\b|\bcalorie/i.test(n)) {
     const kcal = grab(p.name, /(\d[\d.,]*)\s*kcal/i);
     if (kcal !== null) {
       a.kcal = kcal * (packs > 1 ? packs : 1);
       basis = "parsed";
-    } else if (/ration|mre|epa\b|nrg-?5|datrex|emergency food/i.test(n)) {
+    } else if (/\bration\b|\bmre\b|\bepa\b|\bnrg-?5\b|datrex|emergency food/i.test(n)) {
       const g = grab(p.name, /(\d[\d.,]*)\s*g\b/i);
       a.kcal = g !== null ? Math.round(g * 4.8) : 2400;
       basis = g !== null ? "parsed" : "typical";

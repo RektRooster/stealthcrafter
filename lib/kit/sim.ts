@@ -395,30 +395,41 @@ export function recommend(
 
 function reasonFor(c: KitItem, weakest: Pillar): string {
   const a = c.attrs;
-  switch (weakest) {
-    case "water":
-      if (a.waterStoreL) return `Adds ${a.waterStoreL} L of stored water`;
-      if (a.waterTreatL) return `Treats up to ${a.waterTreatL.toLocaleString("en-GB")} L`;
-      break;
-    case "food":
-      if (a.kcal) return `Adds ${Math.round(a.kcal).toLocaleString("en-GB")} kcal`;
-      break;
-    case "heat":
-      if (a.heatKwh) return `Adds ${a.heatKwh.toFixed(1)} kWh of fuel`;
-      if (a.insulationC) return `Cuts heating demand by ${a.insulationC}°C`;
-      break;
-    case "power":
-      if (a.wh) return `Adds ${Math.round(a.wh)} Wh of stored power`;
-      if (a.whPerDay) return `Generates ${Math.round(a.whPerDay)} Wh/day`;
-      break;
-    case "light":
-      if (a.lumenHours) return `Adds ${Math.round(a.lumenHours).toLocaleString("en-GB")} lumen-hours`;
-      break;
-    case "medical":
-      if (a.medical?.length) return `Covers ${a.medical.join(", ")}`;
-      break;
-  }
-  return "Improves your weakest pillar";
+  // Describe what the item ACTUALLY contributes. Describing it by the pillar it
+  // was ranked for produced nonsense like a water filter "adding 2,400 kcal".
+  const claims: [Pillar, string | null][] = [
+    [
+      "water",
+      a.waterStoreL
+        ? `Adds ${a.waterStoreL.toFixed(1)} L of stored water`
+        : a.waterTreatL
+        ? `Treats up to ${a.waterTreatL.toLocaleString("en-GB")} L`
+        : null,
+    ],
+    ["food", a.kcal ? `Adds ${Math.round(a.kcal).toLocaleString("en-GB")} kcal` : null],
+    [
+      "heat",
+      a.heatKwh
+        ? `Adds ${a.heatKwh.toFixed(1)} kWh of fuel`
+        : a.insulationC
+        ? `Cuts heating demand by ${a.insulationC.toFixed(1)}°C`
+        : null,
+    ],
+    [
+      "power",
+      a.wh
+        ? `Adds ${Math.round(a.wh)} Wh of stored power`
+        : a.whPerDay
+        ? `Generates ${Math.round(a.whPerDay)} Wh/day`
+        : null,
+    ],
+    ["light", a.lumenHours ? `Adds ${Math.round(a.lumenHours).toLocaleString("en-GB")} lumen-hours` : null],
+    ["medical", a.medical?.length ? `Covers ${a.medical.join(", ")}` : null],
+  ];
+  const preferred = claims.find(([p, text]) => p === weakest && text);
+  if (preferred) return preferred[1] as string;
+  const any = claims.filter(([, text]) => text).map(([, text]) => text as string);
+  return any.length ? any.join(" · ") : "Improves your weakest pillar";
 }
 
 /* -------------------------------------------------------------------------- */
