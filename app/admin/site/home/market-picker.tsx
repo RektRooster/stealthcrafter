@@ -22,6 +22,7 @@
    ===================================================================== */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MARKET_COOKIE, MARKET_GROUPS, flagSrc } from "@/lib/market";
 import { countryName } from "@/lib/iso-ids";
 
@@ -40,6 +41,13 @@ export default function MarketPicker({ initial, active, onPick }: Props) {
   const [q, setQ] = useState("");
   const [current, setCurrent] = useState<string | null>(initial);
   const boxRef = useRef<HTMLDivElement | null>(null);
+  // Portalled to <body>, and this is not optional. The chooser button lives in
+  // the status strip, and that strip has `backdrop-filter` — which makes it a
+  // containing block for fixed-position descendants. Rendered in place, the
+  // modal resolved `position: fixed` against a 42px-tall strip and came out as
+  // a squashed row of flags across the top of the map.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   function choose(iso2: string | null) {
     setCurrent(iso2);
@@ -105,7 +113,7 @@ export default function MarketPicker({ initial, active, onPick }: Props) {
         )}
       </button>
 
-      {open && (
+      {open && mounted && createPortal(
         <div className="sf-mkwrap" role="dialog" aria-label="Choose your country">
           <div className="sf-mkscrim" onClick={() => setOpen(false)} />
           <div className="sf-mkbox" ref={boxRef}>
@@ -175,7 +183,8 @@ export default function MarketPicker({ initial, active, onPick }: Props) {
               </span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
