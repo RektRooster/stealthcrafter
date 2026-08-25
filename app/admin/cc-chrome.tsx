@@ -123,6 +123,7 @@ const TABS = [
   { href: "/admin/orders", label: "Orders", icon: "orders" },
   { href: "/admin/customers", label: "Customers", icon: "customers" },
   { href: "/admin/jimmy", label: "Jimmy", icon: "jimmy" },
+  { href: "/admin/feeds", label: "Feeds", icon: "map" },
   { href: "/admin/settings", label: "Settings", icon: "settings" },
 ];
 
@@ -159,6 +160,7 @@ const SF_TABS = [
   { href: "/admin/site/kit-builder", label: "Kit Builder" },
   { href: "/admin/site/tested", label: "Tested Reports" },
   { href: "/admin/site/dashboard", label: "My Dashboard" },
+  { href: "/admin/site/sources", label: "Sources" },
 ];
 
 export function SfNav() {

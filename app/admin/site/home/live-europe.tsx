@@ -29,7 +29,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Map as MlMap, MapMouseEvent } from "maplibre-gl";
-import type { HazardEvent, HazardSource, SourceStatus } from "@/lib/hazards/types";
+import type { HazardSource, SourceStatus } from "@/lib/hazards/types";
+import type { FeedHealth, LiveEvent } from "@/lib/live-conditions";
 import type { HomeDashboard } from "@/lib/home-dashboard";
 import { SEVERITY } from "@/lib/palette";
 import { countryName } from "@/lib/iso-ids";
@@ -70,17 +71,30 @@ const KIND_WORD: Record<string, string> = {
   wildfire: "Wildfire",
   earthquake: "Earthquake",
   flood: "Flood",
-  storm: "Storm",
+  storm: "Storm / wind",
+  rain: "Heavy rain",
+  snow: "Snow",
+  ice: "Ice",
+  avalanche: "Avalanche",
+  heat: "Extreme heat",
+  cold: "Extreme cold",
+  fog: "Fog",
+  coastal: "Coastal event",
   disaster: "Major event",
   grid: "Power grid",
   transport: "Transport",
+  health: "Public health",
+  water: "Drinking water",
+  other: "Other",
 };
 
 type Props = {
   geo: GeoJSON.FeatureCollection;
   bounds: Record<string, [number, number, number, number]>;
-  events: HazardEvent[];
+  events: LiveEvent[];
   sources: SourceStatus[];
+  feeds: FeedHealth[];
+  credits: string[];
   generatedAt: string;
   dash: HomeDashboard;
 };
@@ -144,6 +158,103 @@ function drawGlyph(ctx: CanvasRenderingContext2D, kind: string, s: number) {
       }
       ctx.stroke();
       return;
+    case "snow": // flake
+      for (let i = 0; i < 3; i++) {
+        const a = (Math.PI / 3) * i;
+        ctx.moveTo(-Math.cos(a) * s, -Math.sin(a) * s);
+        ctx.lineTo(Math.cos(a) * s, Math.sin(a) * s);
+      }
+      ctx.stroke();
+      return;
+    case "ice": // droplet over a line
+      ctx.moveTo(0, -s * 0.9);
+      ctx.bezierCurveTo(s * 0.62, -s * 0.05, s * 0.4, s * 0.5, 0, s * 0.5);
+      ctx.bezierCurveTo(-s * 0.4, s * 0.5, -s * 0.62, -s * 0.05, 0, -s * 0.9);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.9, s * 0.86);
+      ctx.lineTo(s * 0.9, s * 0.86);
+      ctx.stroke();
+      return;
+    case "avalanche": // slope with mass
+      ctx.moveTo(-s * 0.9, s * 0.7);
+      ctx.lineTo(s * 0.1, -s * 0.85);
+      ctx.lineTo(s * 0.9, s * 0.7);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.35, s * 0.7);
+      ctx.lineTo(s * 0.25, -s * 0.2);
+      ctx.lineTo(s * 0.62, s * 0.7);
+      ctx.closePath();
+      ctx.fill();
+      return;
+    case "heat": // sun
+      ctx.arc(0, 0, s * 0.42, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI / 4) * i;
+        ctx.moveTo(Math.cos(a) * s * 0.66, Math.sin(a) * s * 0.66);
+        ctx.lineTo(Math.cos(a) * s, Math.sin(a) * s);
+      }
+      ctx.stroke();
+      return;
+    case "cold": // thermometer, low
+      ctx.moveTo(0, -s * 0.85);
+      ctx.lineTo(0, s * 0.35);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, s * 0.6, s * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    case "rain": // drops
+      for (let i = -1; i <= 1; i++) {
+        ctx.moveTo(i * s * 0.55, -s * 0.7);
+        ctx.lineTo(i * s * 0.55 - s * 0.18, s * 0.65);
+      }
+      ctx.stroke();
+      return;
+    case "fog": // stacked bars
+      for (let i = -1; i <= 1; i++) {
+        const y = i * s * 0.52;
+        ctx.moveTo(-s * 0.9, y);
+        ctx.lineTo(s * (i === 0 ? 0.55 : 0.9), y);
+      }
+      ctx.stroke();
+      return;
+    case "coastal": // wave against a shore
+      ctx.moveTo(-s * 0.9, s * 0.5);
+      ctx.quadraticCurveTo(-s * 0.2, -s * 0.1, s * 0.35, s * 0.5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(s * 0.2, s * 0.85);
+      ctx.lineTo(s * 0.95, s * 0.85);
+      ctx.lineTo(s * 0.6, -s * 0.3);
+      ctx.stroke();
+      return;
+    case "health": // cross
+      ctx.moveTo(-s * 0.28, -s * 0.85);
+      ctx.lineTo(s * 0.28, -s * 0.85);
+      ctx.lineTo(s * 0.28, -s * 0.28);
+      ctx.lineTo(s * 0.85, -s * 0.28);
+      ctx.lineTo(s * 0.85, s * 0.28);
+      ctx.lineTo(s * 0.28, s * 0.28);
+      ctx.lineTo(s * 0.28, s * 0.85);
+      ctx.lineTo(-s * 0.28, s * 0.85);
+      ctx.lineTo(-s * 0.28, s * 0.28);
+      ctx.lineTo(-s * 0.85, s * 0.28);
+      ctx.lineTo(-s * 0.85, -s * 0.28);
+      ctx.lineTo(-s * 0.28, -s * 0.28);
+      ctx.closePath();
+      ctx.fill();
+      return;
+    case "water": // tap drop
+      ctx.moveTo(0, -s * 0.85);
+      ctx.bezierCurveTo(s * 0.68, 0, s * 0.44, s * 0.85, 0, s * 0.85);
+      ctx.bezierCurveTo(-s * 0.44, s * 0.85, -s * 0.68, 0, 0, -s * 0.85);
+      ctx.fill();
+      return;
     case "storm": // swirl
       ctx.moveTo(-s * 0.8, -s * 0.45);
       ctx.quadraticCurveTo(s * 0.5, -s * 0.9, s * 0.55, -s * 0.1);
@@ -203,6 +314,8 @@ export default function LiveEurope({
   bounds,
   events,
   sources,
+  feeds,
+  credits,
   generatedAt,
   dash,
 }: Props) {
@@ -233,7 +346,7 @@ export default function LiveEurope({
   const shown = useMemo(
     () =>
       events.filter((e) => {
-        if (off.has(e.source)) return false;
+        if (off.has(e.source as HazardSource)) return false;
         if (severeOnly && e.severity !== "severe" && e.severity !== "elevated") return false;
         if (country && e.countryIso2 !== country) return false;
         return true;
@@ -360,6 +473,41 @@ export default function LiveEurope({
           },
         });
 
+        /* Alert AREAS. Most of what CAP carries is a district, not a point —
+           a storm warning covers powiat biłgorajski, and dropping a pin in the
+           middle of it misrepresents the alert. Drawn under the markers, and
+           only where the feed actually supplied geometry: an area we cannot
+           draw is listed in the rail by its own name and never invented. */
+        map.addSource("areas", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+
+        map.addLayer({
+          id: "area-fill",
+          type: "fill",
+          source: "areas",
+          paint: {
+            "fill-color": ["get", "colour"],
+            "fill-opacity": [
+              "case",
+              ["==", ["get", "sel"], true], 0.42,
+              ["match", ["get", "sev"], "severe", 0.3, "elevated", 0.24, "watch", 0.17, 0.11],
+            ],
+          },
+        });
+
+        map.addLayer({
+          id: "area-line",
+          type: "line",
+          source: "areas",
+          paint: {
+            "line-color": ["get", "colour"],
+            "line-width": ["case", ["==", ["get", "sel"], true], 2.4, 1],
+            "line-opacity": 0.85,
+          },
+        });
+
         map.addSource("hazards", {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
@@ -431,6 +579,13 @@ export default function LiveEurope({
           setSelected(String(f.properties.id));
         });
 
+        map.on("click", "area-fill", (ev: MapMouseEvent & { features?: any[] }) => {
+          const f = ev.features?.[0];
+          if (!f) return;
+          ev.originalEvent.stopPropagation();
+          setSelected(String(f.properties.id));
+        });
+
         map.on("click", "country-fill", (ev: MapMouseEvent & { features?: any[] }) => {
           const f = ev.features?.[0];
           if (!f) return;
@@ -457,7 +612,7 @@ export default function LiveEurope({
         });
         map.on("mouseleave", "country-fill", () => setHover(null));
 
-        for (const id of ["hz-pin", "country-fill"]) {
+        for (const id of ["hz-pin", "area-fill", "country-fill"]) {
           map.on("mouseenter", id, () => {
             if (map) map.getCanvas().style.cursor = "pointer";
           });
@@ -510,15 +665,37 @@ export default function LiveEurope({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
+
+    const areaSrc: any = map.getSource("areas");
+    if (areaSrc) {
+      areaSrc.setData({
+        type: "FeatureCollection",
+        features: shown
+          .filter((e) => e.geom)
+          .map((e) => ({
+            type: "Feature" as const,
+            geometry: e.geom as GeoJSON.Geometry,
+            properties: {
+              id: e.id,
+              sev: e.severity,
+              colour: SEVERITY[e.severity],
+              sel: e.id === selected,
+            },
+          })),
+      });
+    }
+
     const src: any = map.getSource("hazards");
     if (!src) return;
     src.setData({
       type: "FeatureCollection",
       features: shown
-        .filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lon))
+        // No coordinates means no marker. An alert we cannot place is listed
+        // in the rail and shades its country; it is never given a point.
+        .filter((e) => e.lat !== null && e.lon !== null && Number.isFinite(e.lat) && Number.isFinite(e.lon))
         .map((e) => ({
           type: "Feature" as const,
-          geometry: { type: "Point" as const, coordinates: [e.lon, e.lat] },
+          geometry: { type: "Point" as const, coordinates: [e.lon as number, e.lat as number] },
           properties: {
             id: e.id,
             kind: KIND_WORD[e.kind] ? e.kind : "disaster",
@@ -784,18 +961,17 @@ export default function LiveEurope({
                 <dt>Type</dt>
                 <dd>{KIND_WORD[featured.kind] || featured.kind}</dd>
               </div>
-              {featured.magnitude !== null && (
+              {featured.upstreamSeverity && (
                 <div>
-                  <dt>Measured</dt>
-                  <dd>
-                    {featured.magnitude.toLocaleString("en-GB")} {featured.unit}
-                  </dd>
+                  {/* The authority's own words, never restated as ours. */}
+                  <dt>Authority calls it</dt>
+                  <dd>{featured.upstreamSeverity}</dd>
                 </div>
               )}
-              {featured.countryIso2 && (
+              {(featured.areaDesc || featured.countryIso2) && (
                 <div>
                   <dt>Where</dt>
-                  <dd>{countryName(featured.countryIso2)}</dd>
+                  <dd>{featured.areaDesc || countryName(featured.countryIso2!)}</dd>
                 </div>
               )}
               <div>
@@ -807,6 +983,13 @@ export default function LiveEurope({
                 <dd>{featured.source}</dd>
               </div>
             </dl>
+            {featured.instruction && (
+              <div className="sf-live-instruction">
+                <span>What {featured.source} says to do</span>
+                <p>{featured.instruction}</p>
+              </div>
+            )}
+
             <div className="sf-live-pillars">
               {featured.pillars.map((p) => (
                 <span key={p}>{p}</span>
@@ -838,6 +1021,12 @@ export default function LiveEurope({
                 </a>
               )}
             </div>
+            {featured.attribution && (
+              /* Attribution is a condition of CC BY, OGL and the Meteoalarm
+                 terms — it belongs on the alert, not only on a page nobody
+                 opens. */
+              <p className="sf-live-credit">{featured.attribution}</p>
+            )}
           </article>
         )}
 
@@ -1029,7 +1218,7 @@ function JimmyTab({
 }: {
   dash: HomeDashboard;
   onAsk: (q: string) => void;
-  featured?: HazardEvent;
+  featured?: LiveEvent;
 }) {
   const [q, setQ] = useState("");
   const prompts = [
