@@ -5803,3 +5803,30 @@ a.sf-live-chip { text-decoration: none; }
   .sf-mkfoot { padding: 12px 16px 16px; }
   .sf-mkgrid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
+
+/* ---------- chooser: the EU default state ---------- */
+/* Two labels in one button: what you are looking at now, and what you can do
+   about it. "Europe" is the state; "Choose your country" is the invitation. */
+.sf-mkbtn b { font-weight: 600; color: var(--fg, #f0f5fa); }
+.sf-mkbtn em {
+  font-style: normal; font-size: 11px; color: rgba(240,245,250,.58);
+  padding-left: 9px; margin-left: 3px; border-left: 1px solid rgba(255,255,255,.16);
+}
+.sf-mkbtn:hover em { color: rgba(240,245,250,.85); }
+
+/* Marked while nothing has been chosen. A slow breath rather than a flash:
+   it should read as "there is something here for you", not as an alarm on a
+   page whose actual alarms mean somebody should act. */
+.sf-mkbtn.invite {
+  border-color: rgba(226,199,146,.45);
+  background: rgba(226,199,146,.12);
+  animation: sf-mkinvite 4.5s ease-in-out infinite;
+}
+.sf-mkbtn.invite em { color: #e2c792; }
+@keyframes sf-mkinvite {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(226,199,146,0); }
+  50%      { box-shadow: 0 0 0 4px rgba(226,199,146,.14); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-mkbtn.invite { animation: none; box-shadow: 0 0 0 3px rgba(226,199,146,.14); }
+}

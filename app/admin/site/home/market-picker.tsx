@@ -3,16 +3,16 @@
 /* =====================================================================
    COUNTRY CHOOSER
 
-   Two jobs, and they want different shapes.
+   THE PAGE ALWAYS OPENS EU-WIDE. The first version put the chooser up
+   as a modal on a first visit, and Ace was right that this contradicts
+   itself: you cannot start Europe-wide behind a dialog covering Europe.
+   So the default state is the EU flag and an explicit invitation sitting
+   in the status strip — the whole continent visible, and a clear way to
+   narrow it. Nothing is blocked, and nobody has to dismiss anything to
+   see what they came for.
 
-   On a first visit it is a question worth asking, because everything on
-   the page gets better once it is answered — so it appears over the map
-   as a glass panel and the map keeps moving behind it. It is NOT a wall:
-   "show me all of Europe" is a real answer, sitting in the same place as
-   the flags, not hidden in a corner as a dismissal.
-
-   Afterwards it is a control, not a question: a flag button in the
-   status strip that reopens the same panel.
+   The invitation is marked on a first visit and settles down once a
+   choice has been made, at which point it becomes a plain control.
 
    What we deliberately do NOT do is geolocate and reshape the shop
    around a guess. An IP tells you where a connection terminates, not
@@ -35,9 +35,12 @@ type Props = {
 };
 
 export default function MarketPicker({ initial, active, onPick }: Props) {
-  // Open on a first visit, closed once a choice exists. `initial` comes from the
-  // server, so this is right on the first paint rather than after a flash.
-  const [open, setOpen] = useState(initial === null);
+  // Never auto-opens. The page starts EU-wide and invites; it does not
+  // interrogate. `initial` comes from the server, so the button is right on
+  // the first paint rather than after a flash of the default.
+  const [open, setOpen] = useState(false);
+  // Un-chosen is the state worth drawing attention to — once.
+  const inviting = initial === null && current === null;
   const [q, setQ] = useState("");
   const [current, setCurrent] = useState<string | null>(initial);
   const boxRef = useRef<HTMLDivElement | null>(null);
@@ -94,21 +97,22 @@ export default function MarketPicker({ initial, active, onPick }: Props) {
     <>
       <button
         type="button"
-        className={`sf-mkbtn${current ? " on" : ""}`}
+        className={`sf-mkbtn${current ? " on" : ""}${inviting ? " invite" : ""}`}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        title="Choose your country"
+        title={current ? "Change country" : "Choose your country"}
       >
+        {/* The EU flag IS the default state, not a placeholder for one: the
+            whole of Europe is what we are showing, and saying so with the flag
+            is clearer than a globe glyph and a word. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={flagSrc(current ?? "EU")} alt="" width={20} height={15} />
         {current ? (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={flagSrc(current)} alt="" width={20} height={15} />
-            {countryName(current)}
-          </>
+          countryName(current)
         ) : (
           <>
-            <span className="sf-mkglobe" aria-hidden="true">◍</span>
-            All of Europe
+            <b>Europe</b>
+            <em>Choose your country</em>
           </>
         )}
       </button>
@@ -119,7 +123,7 @@ export default function MarketPicker({ initial, active, onPick }: Props) {
           <div className="sf-mkbox" ref={boxRef}>
             <div className="sf-mkhead">
               <div>
-                <h2>{initial === null ? "Where do you live?" : "Change country"}</h2>
+                <h2>{current === null ? "Where do you live?" : "Change country"}</h2>
                 <p>
                   We will centre the map on your country, lead with the warnings that apply to you,
                   and tell you what your national alert system actually is. You can change it any
