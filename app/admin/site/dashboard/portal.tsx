@@ -90,14 +90,14 @@ export default function Portal({ data }: { data: PortalData }) {
     null;
 
   return (
-    <main className="sf-page">
-      <div className="sf-kbwrap">
-        {/* ---------------- who ---------------- */}
-        <div className="sf-portalbar">
+    <main className="sf-page banded">
+      {/* ---------------- who ---------------- */}
+      <header className="sf-band">
+        <div className="sf-bandin sf-portalbar">
           <div>
-            <div className="sf-hz-kicker">Your household</div>
+            <div className="sf-bandkicker">Your household</div>
             <h1>{h.name}</h1>
-            <p>
+            <p className="sf-bandlede">
               {[
                 h.location,
                 h.home,
@@ -121,7 +121,9 @@ export default function Portal({ data }: { data: PortalData }) {
             </select>
           </label>
         </div>
+      </header>
 
+      <div className="sf-kbwrap">
         {/* ---------------- the readiness console ---------------- */}
         <section className="sf-console">
           <div className="sf-consoledial">

@@ -42,33 +42,37 @@ export default function TestedIndexView({ data }: { data: TestedIndex }) {
   }
 
   return (
-    <main className="sf-page">
-      <div className="sf-catwrap">
-        <header className="sf-cathead wide">
-          <div className="sf-hz-kicker">Tested Reports</div>
+    <main className="sf-page banded">
+      <header className="sf-band">
+        <div className="sf-bandin">
+          <div className="sf-bandkicker">Tested Reports</div>
           <h1>Nothing reaches this shop without earning it.</h1>
-          <p>
+          <p className="sf-bandlede">
             Every product runs the same protocol — the same checkpoints, in the same order, under
             recorded conditions. We write down what we expect{" "}
             <strong>before we open the box</strong>, then publish every result: the method, the
             expectation, and what actually happened. No stars and no sponsored verdicts. What did
             not make it never appears here at all.
           </p>
-        </header>
+          <div className="sf-bandstats">
+            <div className="sf-bandstat">
+              <b>{data.stats.tested}</b>
+              <span>products tested</span>
+            </div>
+            <div className="sf-bandstat">
+              <b>{data.stats.checkpoints.toLocaleString("en-GB")}</b>
+              <span>checkpoints published</span>
+            </div>
+            <div className="sf-bandstat">
+              <b>{data.categories.length}</b>
+              <span>protocols</span>
+            </div>
+          </div>
+        </div>
+      </header>
 
-        <div className="sf-tstats">
-          <div>
-            <strong>{data.stats.tested}</strong>
-            <span>products tested</span>
-          </div>
-          <div>
-            <strong>{data.stats.checkpoints.toLocaleString("en-GB")}</strong>
-            <span>checkpoints run and published</span>
-          </div>
-          <div>
-            <strong>{data.categories.length}</strong>
-            <span>categories with a published protocol</span>
-          </div>
+      <div className="sf-catwrap">
+        <div className="sf-protorow">
           <Link href="/admin/site/tested/protocol" className="sf-tprotolink">
             Read the full protocol →
           </Link>

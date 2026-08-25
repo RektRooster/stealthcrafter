@@ -148,17 +148,20 @@ export default function KitBuilder({ catalogue, liveHints }: Props) {
   )}`;
 
   return (
-    <main className="sf-page">
-      <div className="sf-kbwrap">
-        <header className="sf-kbhead">
-          <div className="sf-hz-kicker">Kit Builder</div>
-          <h1>Your kit has a failure clock. Here is the hour it breaks.</h1>
-          <p>
+    <main className="sf-page banded">
+      <header className="sf-band">
+        <div className="sf-bandin">
+          <div className="sf-bandkicker">Kit Builder</div>
+          <h1 className="wide">Your kit has a failure clock. Here is the hour it breaks.</h1>
+          <p className="sf-bandlede">
             Not a checklist. A simulation. Tell it who lives in your home and what goes wrong, and it
             runs the resources down hour by hour until something gives — then works out the cheapest
             way to buy those hours back.
           </p>
-        </header>
+        </div>
+      </header>
+
+      <div className="sf-kbwrap">
 
         {/* ---------------- household + scenario ---------------- */}
         <section className="sf-kbsetup">
