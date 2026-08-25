@@ -13,34 +13,15 @@ const world = require("world-atlas/countries-50m.json") as Topology<{
   countries: GeometryCollection<{ name: string }>;
 }>;
 
-// EU-27 — the interactive tier (markets we operate in).
-const EU27: Record<string, string> = {
-  "040": "AT", "056": "BE", "100": "BG", "191": "HR", "196": "CY",
-  "203": "CZ", "208": "DK", "233": "EE", "246": "FI", "250": "FR",
-  "276": "DE", "300": "GR", "348": "HU", "372": "IE", "380": "IT",
-  "428": "LV", "440": "LT", "442": "LU", "470": "MT", "528": "NL",
-  "616": "PL", "620": "PT", "642": "RO", "703": "SK", "705": "SI",
-  "724": "ES", "752": "SE",
-};
-
-// Everything else that shares the continent. Drawn dimmer and not clickable,
-// but hazards inside them are still plotted — a fire in Ukraine or a quake in
-// Turkey matters to a household in Poland or Greece.
-const NEIGHBOURS: Record<string, string> = {
-  "826": "GB", "578": "NO", "756": "CH", "352": "IS", "804": "UA",
-  "688": "RS", "070": "BA", "008": "AL", "807": "MK", "499": "ME",
-  "498": "MD", "112": "BY", "792": "TR", "643": "RU", "438": "LI",
-  "020": "AD", "492": "MC", "674": "SM", "336": "VA", "292": "GI",
-  "031": "AZ", "051": "AM", "268": "GE", "012": "DZ", "504": "MA",
-  "788": "TN", "434": "LY", "818": "EG", "760": "SY", "422": "LB",
-  "376": "IL", "400": "JO", "368": "IQ", "398": "KZ",
-  "234": "FO", "833": "IM", "832": "JE", "831": "GG",
-};
-
-// Kosovo carries no stable numeric id in Natural Earth — match on name.
-const BY_NAME: Record<string, string> = { Kosovo: "XK" };
-
-export const EU27_ISO2 = Object.values(EU27);
+// Country id tables live in lib/iso-ids.ts so the light 110m module can share
+// them without dragging this file's 50m topology into the bundle.
+import {
+  BY_NAME_IDS as BY_NAME,
+  EU27_IDS as EU27,
+  EU27_ISO2,
+  NEIGHBOUR_IDS as NEIGHBOURS,
+} from "./iso-ids";
+export { EU27_ISO2 };
 
 // Continental frame. Polygons are properly clipped to this box (not merely
 // dropped) so Russia, Kazakhstan and North Africa terminate at the edge
