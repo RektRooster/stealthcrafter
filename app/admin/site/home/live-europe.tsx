@@ -1053,8 +1053,9 @@ export default function LiveEurope({
                 <strong>{e.title}</strong>
                 <p>{e.summary}</p>
                 <span className="sf-live-itemmeta">
-                  {e.countryIso2 ? countryName(e.countryIso2) : "Offshore"} · {e.source} ·{" "}
-                  {timeAgo(e.at)}
+                  {e.areaDesc || (e.countryIso2 ? countryName(e.countryIso2) : "Offshore")} ·{" "}
+                  {e.source} · {timeAgo(e.at)}
+                  {e.count > 1 && <b> · {e.count} areas</b>}
                 </span>
               </div>
             </li>

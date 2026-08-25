@@ -48,6 +48,12 @@ export type LiveEvent = {
   url: string | null;
   attribution: string | null;
   pillars: string[];
+  /** How many upstream records this row represents. Meteoalarm issues one
+      warning per district, so a single thunderstorm warning arrives as three
+      hundred rows; they are folded into one and counted. */
+  count: number;
+  /** Named areas the fold covered, for the detail panel. */
+  areas: string[];
 };
 
 export type FeedHealth = {
@@ -139,6 +145,8 @@ export async function getLiveSnapshot(countryIso2?: string): Promise<LiveSnapsho
         attribution:
           legacy.sources.find((s) => s.source === e.source)?.attribution ?? null,
         pillars: e.pillars,
+        count: 1,
+        areas: [],
       })),
   ];
 
@@ -208,7 +216,7 @@ async function readStoredAlerts(
 
   const { data } = await q;
 
-  const events: LiveEvent[] = (data || []).map((a: any) => {
+  const raw: LiveEvent[] = (data || []).map((a: any) => {
     const feed = allowed.get(a.feed_id);
     return {
       id: a.id,
@@ -232,8 +240,12 @@ async function readStoredAlerts(
       // issuing national service, not only the aggregator.
       attribution: a.attribution || feed?.attribution || null,
       pillars: PILLARS_BY_KIND[a.kind] ?? ["Shelter"],
+      count: 1,
+      areas: a.area_desc ? [a.area_desc] : [],
     };
   });
+
+  const events = foldByArea(raw);
 
   const health: FeedHealth[] = feeds.map((f) => ({
     id: f.id,
@@ -264,4 +276,84 @@ export function summariseByCountry(events: LiveEvent[]) {
     byCountry[e.countryIso2] = cur;
   }
   return { byCountry, severe, total: events.length };
+}
+
+
+/**
+ * Fold district-level duplicates of the same warning into one row.
+ *
+ * This is not deduplication across sources — that is `dedupe_key`'s job. This
+ * is the opposite problem: ONE warning, published once per area it covers,
+ * which is how CAP is meant to work and how Meteoalarm serves it. Poland's feed
+ * returned 721 rows in the first sweep for what a reader would call about six
+ * warnings.
+ *
+ * Listing all 721 would be accurate and useless. Folding them loses nothing:
+ * the area names are all kept, the geometries are unioned so the map still
+ * shades every district, and the count is shown. What a household needs to know
+ * is "there is a thunderstorm warning covering most of eastern Poland", not a
+ * list of powiats.
+ *
+ * The fold is conservative — same feed, same kind, same severity, same headline
+ * and the same onset hour. Two genuinely different warnings never merge.
+ */
+function foldByArea(events: LiveEvent[]): LiveEvent[] {
+  const groups = new Map<string, LiveEvent[]>();
+  for (const e of events) {
+    const hour = e.at ? e.at.slice(0, 13) : "";
+    const key = [e.feedId, e.kind, e.severity, hour, e.title].join("|");
+    const g = groups.get(key);
+    if (g) g.push(e);
+    else groups.set(key, [e]);
+  }
+
+  const out: LiveEvent[] = [];
+  for (const g of groups.values()) {
+    if (g.length === 1) {
+      out.push(g[0]);
+      continue;
+    }
+    const head = g[0];
+    const areas = [...new Set(g.flatMap((e) => e.areas).filter(Boolean))];
+    const withGeom = g.filter((e) => e.geom);
+
+    out.push({
+      ...head,
+      // A stable id for the fold, so selecting one on the map survives a refresh.
+      id: `${head.feedId}:group:${hashish(g.map((e) => e.id).sort().join(","))}`,
+      count: g.length,
+      areas,
+      areaDesc:
+        areas.length > 3
+          ? `${areas.length} areas — ${areas.slice(0, 3).join(", ")}…`
+          : areas.join("; ") || head.areaDesc,
+      geom: unionGeom(withGeom.map((e) => e.geom as GeoJSON.Geometry)),
+      // Only claim a point if exactly one of the folded rows had one; a marker
+      // in the middle of "most of eastern Poland" is a lie of precision.
+      lat: withGeom.length === 1 ? withGeom[0].lat : head.lat,
+      lon: withGeom.length === 1 ? withGeom[0].lon : head.lon,
+      expires: g.map((e) => e.expires).filter(Boolean).sort().slice(-1)[0] ?? head.expires,
+    });
+  }
+
+  return out;
+}
+
+/** Collect polygons into one MultiPolygon. Not a topological union — these are
+    adjacent districts and drawing them as separate rings is correct. */
+function unionGeom(geoms: GeoJSON.Geometry[]): GeoJSON.Geometry | null {
+  const polys: any[] = [];
+  for (const g of geoms) {
+    if (!g) continue;
+    if (g.type === "Polygon") polys.push((g as any).coordinates);
+    else if (g.type === "MultiPolygon") polys.push(...(g as any).coordinates);
+  }
+  if (!polys.length) return null;
+  return { type: "MultiPolygon", coordinates: polys } as GeoJSON.Geometry;
+}
+
+function hashish(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h).toString(36);
 }
