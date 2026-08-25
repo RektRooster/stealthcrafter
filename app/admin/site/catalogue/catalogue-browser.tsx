@@ -67,38 +67,43 @@ export default function CatalogueBrowser({ data }: { data: CatalogueData }) {
 
   return (
     <main className="sf-page">
-      <div className="sf-catwrap">
-        <header className="sf-cathead">
-          <div className="sf-hz-kicker">Catalogue</div>
-          <h1>Everything we are looking at — and what we have actually checked.</h1>
-          <p>
-            {data.products.length.toLocaleString("en-GB")} products. Each one carries its evidence
-            state, openly: what we have verified, what we have only sourced, and what is still just
-            on the research list. Nothing here is dressed up as more settled than it is.
+      {/* The band carries the home screen's world into the shop, then hands over
+          to light for the browsing itself. The evidence ladder lives inside it
+          as a row of figures rather than six boxes: it is the page's argument,
+          and it is also the primary filter. */}
+      <header className="sf-hero">
+        <div className="sf-heroin">
+          <div className="sf-herokicker">Catalogue</div>
+          <h1 className="wide">Everything we are looking at — and what we have actually checked.</h1>
+          <p className="sf-herolede">
+            Each product carries its evidence state, openly: what we have verified ourselves, what we
+            have only sourced, and what is still on the research list. Nothing here is dressed up as
+            more settled than it is.
           </p>
-        </header>
 
-        {/* Evidence ladder — doubles as the primary filter. */}
-        <div className="sf-ladder">
-          {EVIDENCE_ORDER.map((s) => {
-            const meta = EVIDENCE_META[s];
-            const on = states.has(s);
-            return (
-              <button
-                key={s}
-                type="button"
-                className={`sf-rung t-${meta.tone}${on ? " on" : ""}`}
-                onClick={() => toggleState(s)}
-                title={meta.blurb}
-              >
-                <span className="sf-rungn">{data.counts[s].toLocaleString("en-GB")}</span>
-                <span className="sf-rungl">{meta.label}</span>
-                <span className="sf-rungb">{meta.short}</span>
-              </button>
-            );
-          })}
+          <div className="sf-herostats" role="group" aria-label="Filter by evidence state">
+            {EVIDENCE_ORDER.map((s) => {
+              const meta = EVIDENCE_META[s];
+              const on = states.has(s);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  className={`sf-herostat${on ? " on" : ""}`}
+                  onClick={() => toggleState(s)}
+                  title={meta.blurb}
+                  aria-pressed={on}
+                >
+                  <b>{data.counts[s].toLocaleString("en-GB")}</b>
+                  <span>{meta.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+      </header>
 
+      <div className="sf-catwrap">
         <div className="sf-catbody">
           <aside className="sf-catside">
             <input
@@ -203,7 +208,7 @@ function ProductCard({ p }: { p: CatalogueProduct }) {
   const meta = EVIDENCE_META[p.state];
   const price = toEur(p.price, p.currency);
   return (
-    <Link href={`/admin/site/catalogue/${p.slug}`} className={`sf-card st-${p.state}`}>
+    <Link href={`/admin/site/catalogue/${p.slug}`} className={`sf-card sf-lift st-${p.state}`}>
       <div className="sf-cardimg">
         {p.image ? (
           // No loading="lazy": Chrome never fires the intersection callback for
@@ -214,6 +219,10 @@ function ProductCard({ p }: { p: CatalogueProduct }) {
         ) : (
           <span className="sf-noimg">No image yet</span>
         )}
+        {/* Evidence used to shout from a chip on every tile. It is the most
+            important thing about a product and the least urgent thing on a
+            grid, so it is a quiet rule of colour down the card edge plus a
+            word — read it when you want it, ignore it while you browse. */}
         <span className={`sf-state t-${meta.tone}`}>{meta.label}</span>
       </div>
       <div className="sf-cardbody">

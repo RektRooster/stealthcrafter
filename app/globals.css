@@ -5340,3 +5340,238 @@ table.cc-comp-flagtable { min-width: 760px; }
 .sf-ccsrc em { font-style: normal; color: var(--sc-fg-4); }
 a.sf-live-chip { text-decoration: none; }
 .sf-cccov.avail { border-left: 3px solid #0072B2; }
+
+/* ============================================================
+   STOREFRONT DESIGN LAYER
+   ------------------------------------------------------------
+   The home screen became a full-bleed app and left the rest of
+   the shop behind: bordered boxes on flat grey, everything at
+   one visual weight. Ace's read of the old home page — "looks
+   like a site from the 90s" — applies verbatim to the pages a
+   customer actually shops on, and they matter more.
+
+   Two devices carry the home screen's world across without
+   turning a shop dark:
+
+     1. A deep hero band at the top of every storefront page.
+        It is the same ink the map sits in, so a page opens in
+        the same world and then hands over to light for the
+        actual browsing, which is what shopping needs.
+     2. Elevation instead of outlines. A 1px border on flat grey
+        is what reads as dated. Cards now sit on white with a
+        real shadow and lift on hover — depth doing the work
+        that lines were doing badly.
+   ============================================================ */
+
+:root {
+  --sf-ink:        #0a1722;
+  --sf-ink-2:      #10202e;
+  --sf-onink:      #f0f5fa;
+  --sf-onink-2:    rgba(240,245,250,.74);
+  --sf-onink-3:    rgba(240,245,250,.52);
+  --sf-brass-lite: #e2c792;
+
+  --sf-lift-1: 0 1px 2px rgba(16,32,46,.06), 0 2px 8px rgba(16,32,46,.05);
+  --sf-lift-2: 0 2px 4px rgba(16,32,46,.07), 0 10px 26px rgba(16,32,46,.10);
+  --sf-lift-3: 0 4px 8px rgba(16,32,46,.08), 0 20px 44px rgba(16,32,46,.14);
+  --sf-radius:   12px;
+  --sf-radius-s: 9px;
+}
+
+/* ---------- the hero band ---------- */
+.sf-hero {
+  position: relative;
+  /* Break out of the page container so the band runs edge to edge. The map
+     taught us this: a full-bleed surface is most of what stops a page reading
+     as a document with decorations on it. */
+  margin: 0 calc(50% - 50vw) 30px;
+  padding: 40px calc(50vw - 50% + 22px) 34px;
+  background:
+    radial-gradient(1200px 420px at 18% -30%, rgba(226,199,146,.16), transparent 62%),
+    radial-gradient(900px 380px at 92% 120%, rgba(0,114,178,.20), transparent 60%),
+    linear-gradient(178deg, var(--sf-ink), var(--sf-ink-2));
+  color: var(--sf-onink);
+  overflow: hidden;
+}
+/* A hairline of brass where the band meets the page — the one line worth having. */
+.sf-hero::after {
+  content: "";
+  position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(226,199,146,.55), transparent);
+}
+.sf-heroin { max-width: 1240px; margin: 0 auto; }
+.sf-herokicker {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--sf-brass-lite); margin-bottom: 14px;
+}
+.sf-herokicker a { color: inherit; }
+.sf-hero h1 {
+  margin: 0 0 12px;
+  font-size: clamp(26px, 3.4vw, 40px);
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  font-weight: 600;
+  max-width: 17ch;
+  color: var(--sf-onink);
+}
+.sf-hero h1.wide { max-width: 26ch; }
+.sf-herolede {
+  margin: 0; max-width: 62ch;
+  font-size: 14.5px; line-height: 1.7; color: var(--sf-onink-2);
+}
+.sf-heroaside {
+  position: absolute; right: calc(50vw - 50% + 22px); top: 42px;
+  text-align: right;
+}
+.sf-heronum {
+  font-size: 44px; font-weight: 600; line-height: 1;
+  color: var(--sf-brass-lite); letter-spacing: -0.02em;
+}
+.sf-heronuml {
+  font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--sf-onink-3); margin-top: 6px;
+}
+@media (max-width: 900px) {
+  .sf-heroaside { display: none; }
+  .sf-hero { padding-top: 30px; padding-bottom: 26px; }
+}
+
+/* A row of figures inside the band, hairline-separated rather than boxed. */
+.sf-herostats {
+  display: flex; flex-wrap: wrap; gap: 0; margin-top: 26px;
+  border-top: 1px solid rgba(255,255,255,.1); padding-top: 18px;
+}
+.sf-herostat {
+  padding: 0 26px 0 0; margin-right: 26px; position: relative;
+  background: none; border: none; cursor: pointer; text-align: left;
+  font-family: inherit; color: inherit;
+}
+.sf-herostat + .sf-herostat::before {
+  content: ""; position: absolute; left: -26px; top: 4px; bottom: 4px;
+  width: 1px; background: rgba(255,255,255,.12);
+}
+.sf-herostat b {
+  display: block; font-size: 21px; font-weight: 600; line-height: 1.1;
+  color: var(--sf-onink); font-variant-numeric: tabular-nums;
+}
+.sf-herostat span {
+  display: block; margin-top: 4px;
+  font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--sf-onink-3);
+}
+.sf-herostat:hover b { color: var(--sf-brass-lite); }
+.sf-herostat.on b { color: var(--sf-brass-lite); }
+.sf-herostat.on span { color: var(--sf-brass-lite); }
+.sf-herostat.on::after {
+  content: ""; position: absolute; left: 0; right: 26px; bottom: -19px; height: 2px;
+  background: var(--sf-brass-lite);
+}
+
+/* ---------- elevation, replacing outlines ---------- */
+.sf-lift {
+  background: var(--sc-surface);
+  border: none;
+  border-radius: var(--sf-radius);
+  box-shadow: var(--sf-lift-1);
+  transition: box-shadow .18s ease, transform .18s ease;
+}
+.sf-lift:hover { box-shadow: var(--sf-lift-2); transform: translateY(-2px); }
+
+/* ---------- catalogue, rebuilt on the design layer ---------- */
+/* Overrides live at the end of the sheet on purpose: the originals above are
+   left intact so the diff shows what changed and why, rather than a rewrite
+   that hides it. */
+
+.sf-catwrap { max-width: 1440px; margin: 0 auto; padding: 0 24px 56px; }
+.sf-catbody { grid-template-columns: 236px minmax(0,1fr); gap: 34px; align-items: start; }
+
+/* The facet rail scrolls with you rather than sliding away at product 40. */
+.sf-catside {
+  position: sticky; top: 16px;
+  max-height: calc(100dvh - 210px); overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+}
+.sf-catsearch {
+  border-radius: var(--sf-radius-s);
+  border: 1px solid var(--sc-line-soft);
+  box-shadow: var(--sf-lift-1);
+  background: var(--sc-surface);
+  padding: 11px 13px;
+}
+.sf-facethead {
+  font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--sc-fg-4); margin-bottom: 8px;
+}
+.sf-facetrow { border-radius: 7px; padding: 7px 10px; }
+
+/* Results bar sticks so sort and count stay reachable deep in a long grid. */
+.sf-catbar {
+  position: sticky; top: 0; z-index: 2;
+  margin: 0 -8px 16px; padding: 12px 8px;
+  background: linear-gradient(180deg, var(--sc-bg) 74%, transparent);
+  border-bottom: none;
+}
+
+/* Bigger tiles. Product photography was fighting for room against chrome that
+   did not need it — the image is the merchandising. */
+.sf-grid { grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: 18px; }
+
+.sf-card {
+  border: none;
+  border-radius: var(--sf-radius);
+  background: var(--sc-surface);
+  box-shadow: var(--sf-lift-1);
+  overflow: hidden;
+  position: relative;
+}
+.sf-card::before {
+  /* Evidence state as a rule down the edge: present on every card, legible at
+     a glance, and silent while you are looking at the products. */
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: currentColor; opacity: .85; z-index: 1;
+}
+.sf-card.st-listed     { color: var(--sc-ok); }
+.sf-card.st-tested     { color: var(--sc-ok); }
+.sf-card.st-approved   { color: var(--sc-warn); }
+.sf-card.st-sourcing   { color: var(--sc-sev-elevated); }
+.sf-card.st-identified { color: var(--sc-sev-info); }
+.sf-card.st-rejected   { color: var(--sc-bad); }
+.sf-card:hover {
+  background: var(--sc-surface);
+  border-color: transparent;
+  box-shadow: var(--sf-lift-2);
+  transform: translateY(-3px);
+}
+.sf-cardimg {
+  aspect-ratio: 1 / 1;
+  background: linear-gradient(168deg, #ffffff, var(--sc-surface-3));
+  padding: 14px;
+}
+.sf-cardimg img { transition: transform .3s cubic-bezier(.2,.7,.3,1); }
+.sf-card:hover .sf-cardimg img { transform: scale(1.045); }
+.sf-state {
+  top: 9px; left: 12px;
+  background: rgba(255,255,255,.94);
+  border: none;
+  box-shadow: 0 1px 3px rgba(16,32,46,.14);
+  backdrop-filter: blur(4px);
+  font-size: 9px; padding: 3px 8px; border-radius: 999px;
+}
+.sf-cardbody { padding: 13px 14px 14px; gap: 5px; }
+.sf-cardbody strong { font-size: 13.5px; line-height: 1.38; }
+.sf-cardfoot { padding-top: 11px; border-top: 1px solid var(--sc-surface-3); }
+.sf-price { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+
+.sf-more {
+  border-radius: 999px; padding: 12px 30px;
+  background: var(--sc-surface); border: 1px solid var(--sc-line-soft);
+  box-shadow: var(--sf-lift-1); color: var(--sc-fg-2); font-weight: 550;
+}
+.sf-more:hover { background: var(--sc-surface); box-shadow: var(--sf-lift-2); color: var(--sc-brass-2); }
+
+@media (max-width: 900px) {
+  .sf-catbody { grid-template-columns: 1fr; }
+  .sf-catside { position: static; max-height: none; }
+}
