@@ -4,16 +4,11 @@
 // CSS. The brief: this should read like instrumentation, not a settings page.
 
 import { useId } from "react";
+import { BAD, OK, PILLARS as PAL_PILLARS, SEVERITY } from "@/lib/palette";
 
 const safeId = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "");
 
-export const PILLAR_COLOR: Record<string, string> = {
-  Water: "#5fa8d3",
-  Food: "#8fbf6a",
-  Fire: "#f5913c",
-  Shelter: "#c9a9d3",
-  Medical: "#e0655f",
-};
+export const PILLAR_COLOR: Record<string, string> = PAL_PILLARS;
 
 /* ------------------------------------------------------------------ */
 /* Radar — five pillars, current against target                        */
@@ -48,8 +43,8 @@ export function PillarRadar({ points, size = 340 }: { points: RadarPoint[]; size
     <svg viewBox={`0 0 ${size} ${size}`} className="sf-radar" role="img" aria-label="Preparedness across five pillars">
       <defs>
         <radialGradient id={`rg-${uid}`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#e3cf9f" stopOpacity="0.42" />
-          <stop offset="100%" stopColor="#c6a15b" stopOpacity="0.08" />
+          <stop offset="0%" stopColor="#8a6a28" stopOpacity="0.34" />
+          <stop offset="100%" stopColor="#8a6a28" stopOpacity="0.06" />
         </radialGradient>
         <filter id={`gl-${uid}`} x="-40%" y="-40%" width="180%" height="180%">
           <feGaussianBlur stdDeviation="3.4" result="b" />
@@ -152,7 +147,7 @@ export function ReadinessDial({
     return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${rad} ${rad} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`;
   };
 
-  const tone = frac >= scenarioFrac ? "#6ee7a0" : frac >= scenarioFrac * 0.5 ? "#f2c744" : "#f4553c";
+  const tone = frac >= scenarioFrac ? OK : frac >= scenarioFrac * 0.5 ? SEVERITY.elevated : BAD;
   const ticks = Math.max(4, Math.min(12, Math.round(scenarioHours / 12)));
 
   return (
@@ -350,8 +345,8 @@ export function DecayCurve({
     <svg viewBox={`0 0 ${width} ${height}`} className="sf-curve" role="img" aria-label="Readiness over the next three years">
       <defs>
         <linearGradient id={`cv-${uid}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#6ee7a0" stopOpacity="0.34" />
-          <stop offset="100%" stopColor="#6ee7a0" stopOpacity="0" />
+          <stop offset="0%" stopColor={OK} stopOpacity="0.34" />
+          <stop offset="100%" stopColor={OK} stopOpacity="0" />
         </linearGradient>
       </defs>
       {/* the line you must not fall below */}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HazardEvent, HazardSource, SourceStatus } from "@/lib/hazards/types";
 import type { MapCountry } from "@/lib/euro-map";
+import { MAP, SEVERITY } from "@/lib/palette";
 
 type Props = {
   width: number;
@@ -22,18 +23,13 @@ type View = { x: number; y: number; w: number; h: number };
 // Tuned for a dark map: the previous set was only a shade or two off the land
 // underneath it, so nothing read at a glance. These sit well clear of both the
 // sea and the two land tones below.
-const SEV_COLOR: Record<string, string> = {
-  info: "#8fb3d1",
-  watch: "#f2c744",
-  elevated: "#f5913c",
-  severe: "#f4553c",
-};
+const SEV_COLOR: Record<string, string> = SEVERITY;
 
 /* Base land colours. Countries are filled with an opaque blend of these and
    the severity colour, so a tinted country keeps its land identity instead of
    compositing straight onto the sea. */
-const LAND_EU = "#3f3d31";
-const LAND_CTX = "#242e39";
+const LAND_EU = MAP.landEu;
+const LAND_CTX = MAP.landContext;
 
 const SEV_LABEL: Record<string, string> = {
   info: "Informational",
@@ -434,8 +430,8 @@ export default function HazardMap({
           >
             <defs>
               <radialGradient id="hz-sea" cx="50%" cy="42%" r="72%">
-                <stop offset="0%" stopColor="#101c27" />
-                <stop offset="100%" stopColor="#0a121a" />
+                <stop offset="0%" stopColor={MAP.seaFrom} />
+                <stop offset="100%" stopColor={MAP.seaTo} />
               </radialGradient>
             </defs>
             <rect x={0} y={0} width={width} height={height} fill="url(#hz-sea)" />

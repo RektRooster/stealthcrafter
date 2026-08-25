@@ -1,11 +1,12 @@
+import { BAD, OK, SEVERITY } from "@/lib/palette";
 // Shared report graphics. Pure SVG, no dependencies, readable at a glance —
 // the point of the page is that you can see the result before you read it.
 import type { Checkpoint, SectionScore } from "@/lib/tested-data";
 
 const TONE: Record<string, string> = {
-  pass: "#6ee7a0",
-  review: "#f2c744",
-  fail: "#f4553c",
+  pass: OK,
+  review: SEVERITY.elevated,
+  fail: BAD,
 };
 
 /** Verdict donut: passed / missed / not-applicable, with the score in the middle. */
@@ -32,8 +33,8 @@ export function ScoreRing({
   const arcs: { len: number; colour: string; from: number }[] = [];
   for (const [n, col] of [
     [passed, colour],
-    [failed, "#f4553c"],
-    [na, "rgba(255,255,255,.2)"],
+    [failed, BAD],
+    [na, "rgba(22,32,43,.16)"],
   ] as [number, string][]) {
     if (n > 0) {
       arcs.push({ len: seg(n), colour: col, from: offset });
@@ -44,7 +45,7 @@ export function ScoreRing({
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="sf-ring" role="img"
          aria-label={`${passed} of ${total} checkpoints met`}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,.09)" strokeWidth="11" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(22,32,43,.10)" strokeWidth="11" />
       {arcs.map((a, i) => (
         <circle
           key={i}

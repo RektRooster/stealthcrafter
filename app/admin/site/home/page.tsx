@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PILLARS as PAL_PILLARS, SEVERITY } from "@/lib/palette";
 import { getEuroMapData } from "@/lib/euro-map";
 import { getHazardSnapshot, summarise } from "@/lib/hazards";
 import { getHomeDashboard } from "@/lib/home-dashboard";
@@ -7,13 +8,7 @@ import JimmyPanel from "./jimmy-panel";
 
 export const dynamic = "force-dynamic";
 
-const PILLAR_TONE: Record<string, string> = {
-  Water: "#5fa8d3",
-  Food: "#8fbf6a",
-  Fire: "#f5913c",
-  Shelter: "#c9a9d3",
-  Medical: "#e0655f",
-};
+const PILLAR_TONE: Record<string, string> = PAL_PILLARS;
 
 function eur(n: number | null): string {
   if (n === null) return "";

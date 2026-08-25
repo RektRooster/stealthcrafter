@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PILLARS as PAL_PILLARS, SEVERITY } from "@/lib/palette";
 import { useCallback, useMemo, useState } from "react";
 import {
   PILLAR_LABEL,
@@ -20,12 +21,12 @@ type Props = {
 };
 
 const PILLAR_COLOR: Record<Pillar, string> = {
-  water: "#5fa8d3",
-  food: "#8fbf6a",
-  heat: "#f5913c",
-  power: "#f2c744",
-  light: "#e0d5b0",
-  medical: "#e0655f",
+  water: PAL_PILLARS.Water,
+  food: PAL_PILLARS.Food,
+  heat: PAL_PILLARS.Fire,
+  power: SEVERITY.elevated,
+  light: SEVERITY.info,
+  medical: PAL_PILLARS.Medical,
 };
 
 const CARRY_LIMIT_PER_ADULT = 12;

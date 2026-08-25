@@ -1,19 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { PILLARS as PAL_PILLARS, SEVERITY } from "@/lib/palette";
 import { useRouter } from "next/navigation";
 import type { OwnedItem, PortalData } from "@/lib/portal-data";
 import { ScoreRing } from "../tested/report-visuals";
 import { DecayCurve, DepletionTimeline, PillarRadar, ReadinessDial } from "./viz";
 import type { DepletionRow, RadarPoint } from "./viz";
 
-const PILLAR_COLOR: Record<string, string> = {
-  Water: "#5fa8d3",
-  Food: "#8fbf6a",
-  Fire: "#f5913c",
-  Shelter: "#c9a9d3",
-  Medical: "#e0655f",
-};
+const PILLAR_COLOR: Record<string, string> = PAL_PILLARS;
 
 /* The simulator's pillar names to SC 03's five. "heat" is SC 03's "Fire". */
 const SIM_TO_PILLAR: Record<string, string> = {
@@ -32,12 +27,7 @@ const KIT_LABEL: Record<string, string> = {
   work: "Work",
 };
 
-const SEV_COLOR: Record<string, string> = {
-  info: "#8fb3d1",
-  watch: "#f2c744",
-  elevated: "#f5913c",
-  severe: "#f4553c",
-};
+const SEV_COLOR: Record<string, string> = SEVERITY;
 
 function hrs(h: number): string {
   if (!Number.isFinite(h)) return "indefinitely";
