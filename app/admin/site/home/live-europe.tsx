@@ -34,6 +34,7 @@ import type { FeedHealth, LiveEvent } from "@/lib/live-conditions";
 import type { HomeDashboard } from "@/lib/home-dashboard";
 import { SEVERITY } from "@/lib/palette";
 import { countryName } from "@/lib/iso-ids";
+import MarketPicker from "./market-picker";
 
 /* ------------------------------------------------------------------ */
 /* Basemap                                                             */
@@ -95,6 +96,8 @@ type Props = {
   sources: SourceStatus[];
   feeds: FeedHealth[];
   credits: string[];
+  /** The visitor's chosen country, from the cookie. null = all of Europe. */
+  market: string | null;
   generatedAt: string;
   dash: HomeDashboard;
 };
@@ -316,6 +319,7 @@ export default function LiveEurope({
   sources,
   feeds,
   credits,
+  market,
   generatedAt,
   dash,
 }: Props) {
@@ -331,7 +335,10 @@ export default function LiveEurope({
   const [ready, setReady] = useState(false);
   const [off, setOff] = useState<Set<HazardSource>>(new Set());
   const [severeOnly, setSevereOnly] = useState(false);
-  const [country, setCountry] = useState<string | null>(null);
+  /* The chosen market IS the initial country selection: the map opens on it,
+     and clearing the country on the map does not clear the market — one is a
+     view, the other is who you are. */
+  const [country, setCountry] = useState<string | null>(market);
   const [selected, setSelected] = useState<string | null>(null);
   const [hoverName, setHoverName] = useState<string | null>(null);
   const [globe, setGlobe] = useState(false);
@@ -340,6 +347,16 @@ export default function LiveEurope({
   const [rightOpen, setRightOpen] = useState(true);
 
   const available = useMemo(() => new Set(events.map((e) => e.source)), [events]);
+  /* Live count per country, for the chooser. Same list the map draws from, so
+     the number beside a flag is the number of warnings you will actually see. */
+  const activeByCountry = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const e of events) {
+      if (!e.countryIso2) continue;
+      out[e.countryIso2] = (out[e.countryIso2] || 0) + 1;
+    }
+    return out;
+  }, [events]);
   const liveSources = sources.filter((s) => s.state === "live");
   /* Both tiers count. The five pan-European adapters are sources; the national
      authorities behind the ingest spine are feeds, and there are now forty of
@@ -920,6 +937,14 @@ export default function LiveEurope({
             </button>
           </>
         )}
+        <MarketPicker
+          initial={market}
+          active={activeByCountry}
+          onPick={(iso2) => {
+            setCountry(iso2);
+            setSelected(null);
+          }}
+        />
         <Link href="/admin/site/catalogue" className="sf-live-cta">
           Browse equipment
         </Link>

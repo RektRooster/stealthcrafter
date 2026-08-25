@@ -1,4 +1,5 @@
 import { getEuroGeo } from "@/lib/euro-geo";
+import { getMarket } from "@/lib/market-server";
 import { getLiveSnapshot, summariseByCountry } from "@/lib/live-conditions";
 import { getHomeDashboard } from "@/lib/home-dashboard";
 import LiveEurope from "./live-europe";
@@ -16,7 +17,14 @@ export const dynamic = "force-dynamic";
 // why the two paths coexist.
 export default async function HomePage() {
   const geo = getEuroGeo();
-  const [snapshot, dash] = await Promise.all([getLiveSnapshot(), getHomeDashboard()]);
+  // Market comes from the cookie, read here on the server, so the page opens
+  // already centred on the visitor's country rather than defaulting to Europe
+  // and rearranging once the client boots.
+  const [snapshot, dash, market] = await Promise.all([
+    getLiveSnapshot(),
+    getHomeDashboard(),
+    getMarket(),
+  ]);
   const { byCountry } = summariseByCountry(snapshot.events);
 
   return (
@@ -27,6 +35,7 @@ export default async function HomePage() {
       sources={snapshot.sources}
       feeds={snapshot.feeds}
       credits={snapshot.credits}
+      market={market?.iso2 ?? null}
       generatedAt={snapshot.generatedAt}
       dash={dash}
     />
