@@ -21,22 +21,41 @@ export async function POST(req: NextRequest) {
   const sb = supabaseAdmin();
   if (!sb) return NextResponse.json({ error: "supabase not configured" }, { status: 500 });
 
-  const { data, error } = await sb
-    .from("alerts")
-    .select("id, geocodes")
-    .is("geom", null)
-    .not("geocodes", "eq", "[]")
-    .limit(5000);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Paged by id rather than by offset. PostgREST caps a page at 1,000 rows, and
+  // most of what this route examines can NEVER resolve — EMMA_ID and CISORP have
+  // no geometry source until Meteoalarm's Metadata API arrives — so an unpaged
+  // query returns the same unresolvable first thousand every time and the run
+  // makes no progress. The cursor walks past them.
+  const url = new URL(req.url);
+  const after = url.searchParams.get("after") || "";
+  const pages = Math.min(Number(url.searchParams.get("pages") || 1) || 1, 20);
 
-  const rows = (data || []) as { id: string; geocodes: any }[];
+  let cursor = after;
+  let examined = 0;
   let resolved = 0;
   const unresolvedSchemes: Record<string, number> = {};
 
-  for (let i = 0; i < rows.length; i += 100) {
-    const chunk = rows.slice(i, i + 100);
-    const patches: any[] = [];
-    for (const r of chunk) {
+  for (let page = 0; page < pages; page++) {
+    let q = sb
+      .from("alerts")
+      .select("id, geocodes")
+      .is("geom", null)
+      .not("geocodes", "eq", "[]")
+      .order("id", { ascending: true })
+      .limit(1000);
+    if (cursor) q = q.gt("id", cursor);
+
+    const { data, error } = await q;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const batch = (data || []) as { id: string; geocodes: any }[];
+    if (!batch.length) {
+      cursor = "";
+      break;
+    }
+    examined += batch.length;
+    cursor = batch[batch.length - 1].id;
+
+    for (const r of batch) {
       const area = resolveArea(r.geocodes);
       if (!area) {
         for (const g of r.geocodes || []) {
@@ -45,29 +64,21 @@ export async function POST(req: NextRequest) {
         }
         continue;
       }
-      patches.push({
-        id: r.id,
-        geom: area.geom,
-        bbox: area.bbox,
-        lat: area.lat,
-        lon: area.lon,
-      });
-    }
-    if (patches.length) {
       // Only the geometry columns are touched; everything else the authority
       // published stays exactly as it arrived.
-      for (const p of patches) {
-        const { id, ...patch } = p;
-        await sb.from("alerts").update(patch).eq("id", id);
-      }
-      resolved += patches.length;
+      await sb
+        .from("alerts")
+        .update({ geom: area.geom, bbox: area.bbox, lat: area.lat, lon: area.lon })
+        .eq("id", r.id);
+      resolved++;
     }
   }
 
   return NextResponse.json({
     ok: true,
-    examined: rows.length,
+    examined,
     resolved,
+    nextAfter: cursor || null,
     // Named rather than counted: this is the evidence for how much of Europe is
     // still waiting on the Meteoalarm Metadata API.
     stillUndrawable: unresolvedSchemes,
