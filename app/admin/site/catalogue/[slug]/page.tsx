@@ -81,7 +81,18 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 </span>
               </div>
               <div className="sf-buyactions">
-                <button type="button" className="sf-cta sm" disabled>
+                {/* A product that has earned its place shows a live-looking
+                    basket button. It does nothing yet — the basket is SC 06 and
+                    SC 08's ground, not ours — but this is a gated demo whose job
+                    is to show the shop as it will ship, and a permanently greyed
+                    primary action misrepresents that as much as a fake price
+                    would. A product that has NOT earned its place still says so
+                    plainly, and that button really is disabled. */}
+                <button
+                  type="button"
+                  className={`sf-cta sm${p.state === "listed" ? "" : " off"}`}
+                  disabled={p.state !== "listed"}
+                >
                   {p.state === "listed" ? "Add to basket" : "Not yet available"}
                 </button>
                 <Link href={askJimmy} className="sf-buyask">

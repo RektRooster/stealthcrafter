@@ -5709,3 +5709,4 @@ a.sf-live-chip { text-decoration: none; }
 
 /* The evidence ledger is the argument of this page — give it room. */
 .sf-ledger { padding: 22px 24px; }
+.sf-cta.off { background: var(--sc-surface-3); color: var(--sc-fg-4); box-shadow: none; cursor: default; }
