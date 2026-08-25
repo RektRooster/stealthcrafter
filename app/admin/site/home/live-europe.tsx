@@ -400,7 +400,25 @@ export default function LiveEurope({
             "icon-image": ["concat", ["get", "kind"], "-", ["get", "sev"]],
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
-            "icon-size": ["interpolate", ["linear"], ["zoom"], 2, 0.46, 5, 0.62, 9, 0.85],
+            /* Size is graded by severity as well as zoom. On a continental view
+               the 140 routine tremors would otherwise read exactly as loudly as
+               the fire someone needs to act on — the ramp has to be visible in
+               size, not only in hue. Lower sort keys draw first, so the worst
+               events land on top of the pile. */
+            "icon-size": [
+              "interpolate", ["linear"], ["zoom"],
+              2, ["match", ["get", "sev"], "severe", 0.62, "elevated", 0.54, "watch", 0.42, 0.32],
+              5, ["match", ["get", "sev"], "severe", 0.82, "elevated", 0.72, "watch", 0.58, 0.46],
+              9, ["match", ["get", "sev"], "severe", 1.0, "elevated", 0.92, "watch", 0.8, 0.68],
+            ],
+            "symbol-sort-key": ["get", "rank"],
+          },
+          paint: {
+            "icon-opacity": [
+              "interpolate", ["linear"], ["zoom"],
+              2, ["match", ["get", "sev"], "info", 0.5, "watch", 0.8, 1],
+              6, 1,
+            ],
           },
         });
 

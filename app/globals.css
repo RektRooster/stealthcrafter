@@ -4843,8 +4843,14 @@ table.cc-comp-flagtable { min-width: 760px; }
     radial-gradient(120% 90% at 50% 45%, transparent 42%, rgba(4,11,18,.45));
 }
 
+/* Below the panels, not over them. The basemap is the slowest thing on the
+   page and it is also the least urgent: a reader should be able to work the
+   conditions rail while Europe is still arriving. (A tab opened in the
+   background loads no imagery at all until it is looked at, because MapLibre
+   defers its style load to an animation frame — so this overlay must never be
+   what stands between a reader and the data.) */
 .sf-live-boot {
-  position: absolute; inset: 0; z-index: 4; display: flex; gap: 12px;
+  position: absolute; inset: 0; z-index: 2; display: flex; gap: 12px;
   align-items: center; justify-content: center;
   font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--fg-3);
   background: #06111b;
