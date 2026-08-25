@@ -397,7 +397,9 @@ export default function HazardMap({
             >
               <span className="sf-hz-layerdot" data-src={src} />
               {st.label}
-              <span className="sf-hz-layercount">{dead ? STATE_LABEL[st.state] : st.count}</span>
+              {/* A layer that is not reporting is simply dimmed. The page does
+                  not narrate which of our feeds is awaiting a key. */}
+              {!dead && <span className="sf-hz-layercount">{st.count}</span>}
             </button>
           );
         })}

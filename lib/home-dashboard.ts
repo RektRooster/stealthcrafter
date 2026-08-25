@@ -56,7 +56,9 @@ export type HomeDashboard = {
 
 async function countOf(sb: any, table: string, filter?: (q: any) => any): Promise<number> {
   try {
-    let q = sb.from(table).select("id", { head: true, count: "exact" });
+    // "*" not "id": not every table keys on an id column (country_markets
+    // keys on iso2), and selecting a missing column silently returns 0.
+    let q = sb.from(table).select("*", { head: true, count: "exact" });
     if (filter) q = filter(q);
     const { count } = await q;
     return typeof count === "number" ? count : 0;
