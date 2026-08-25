@@ -2225,6 +2225,11 @@ button.cc-lab-step:hover .sl { color: var(--cc-cyan); }
 
 /* ---------- storefront page canvas ---------- */
 .sf-page {
+  /* The band breaks out with a 100vw-based negative margin, and 100vw includes
+     the scrollbar — which produced a horizontal scrollbar on every storefront
+     page. `clip` removes the overflow without creating a scroll container the
+     way `hidden` would, so sticky children still work. */
+  overflow-x: clip;
   min-height: calc(100vh - 240px);
   background:
     radial-gradient(1100px 520px at 50% -10%, rgba(185, 151, 91, 0.1), transparent 60%),
@@ -5379,7 +5384,7 @@ a.sf-live-chip { text-decoration: none; }
 }
 
 /* ---------- the hero band ---------- */
-.sf-hero {
+.sf-band {
   position: relative;
   /* Break out of the page container so the band runs edge to edge. The map
      taught us this: a full-bleed surface is most of what stops a page reading
@@ -5394,19 +5399,19 @@ a.sf-live-chip { text-decoration: none; }
   overflow: hidden;
 }
 /* A hairline of brass where the band meets the page — the one line worth having. */
-.sf-hero::after {
+.sf-band::after {
   content: "";
   position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
   background: linear-gradient(90deg, transparent, rgba(226,199,146,.55), transparent);
 }
-.sf-heroin { max-width: 1240px; margin: 0 auto; }
-.sf-herokicker {
+.sf-bandin { max-width: 1240px; margin: 0 auto; }
+.sf-bandkicker {
   display: inline-flex; align-items: center; gap: 8px;
   font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
   color: var(--sf-brass-lite); margin-bottom: 14px;
 }
-.sf-herokicker a { color: inherit; }
-.sf-hero h1 {
+.sf-bandkicker a { color: inherit; }
+.sf-band h1 {
   margin: 0 0 12px;
   font-size: clamp(26px, 3.4vw, 40px);
   line-height: 1.12;
@@ -5415,55 +5420,55 @@ a.sf-live-chip { text-decoration: none; }
   max-width: 17ch;
   color: var(--sf-onink);
 }
-.sf-hero h1.wide { max-width: 26ch; }
-.sf-herolede {
+.sf-band h1.wide { max-width: 26ch; }
+.sf-bandlede {
   margin: 0; max-width: 62ch;
   font-size: 14.5px; line-height: 1.7; color: var(--sf-onink-2);
 }
-.sf-heroaside {
+.sf-bandaside {
   position: absolute; right: calc(50vw - 50% + 22px); top: 42px;
   text-align: right;
 }
-.sf-heronum {
+.sf-bandnum {
   font-size: 44px; font-weight: 600; line-height: 1;
   color: var(--sf-brass-lite); letter-spacing: -0.02em;
 }
-.sf-heronuml {
+.sf-bandnuml {
   font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase;
   color: var(--sf-onink-3); margin-top: 6px;
 }
 @media (max-width: 900px) {
-  .sf-heroaside { display: none; }
-  .sf-hero { padding-top: 30px; padding-bottom: 26px; }
+  .sf-bandaside { display: none; }
+  .sf-band { padding-top: 30px; padding-bottom: 26px; }
 }
 
 /* A row of figures inside the band, hairline-separated rather than boxed. */
-.sf-herostats {
+.sf-bandstats {
   display: flex; flex-wrap: wrap; gap: 0; margin-top: 26px;
   border-top: 1px solid rgba(255,255,255,.1); padding-top: 18px;
 }
-.sf-herostat {
+.sf-bandstat {
   padding: 0 26px 0 0; margin-right: 26px; position: relative;
   background: none; border: none; cursor: pointer; text-align: left;
   font-family: inherit; color: inherit;
 }
-.sf-herostat + .sf-herostat::before {
+.sf-bandstat + .sf-bandstat::before {
   content: ""; position: absolute; left: -26px; top: 4px; bottom: 4px;
   width: 1px; background: rgba(255,255,255,.12);
 }
-.sf-herostat b {
+.sf-bandstat b {
   display: block; font-size: 21px; font-weight: 600; line-height: 1.1;
   color: var(--sf-onink); font-variant-numeric: tabular-nums;
 }
-.sf-herostat span {
+.sf-bandstat span {
   display: block; margin-top: 4px;
   font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
   color: var(--sf-onink-3);
 }
-.sf-herostat:hover b { color: var(--sf-brass-lite); }
-.sf-herostat.on b { color: var(--sf-brass-lite); }
-.sf-herostat.on span { color: var(--sf-brass-lite); }
-.sf-herostat.on::after {
+.sf-bandstat:hover b { color: var(--sf-brass-lite); }
+.sf-bandstat.on b { color: var(--sf-brass-lite); }
+.sf-bandstat.on span { color: var(--sf-brass-lite); }
+.sf-bandstat.on::after {
   content: ""; position: absolute; left: 0; right: 26px; bottom: -19px; height: 2px;
   background: var(--sf-brass-lite);
 }
@@ -5575,3 +5580,11 @@ a.sf-live-chip { text-decoration: none; }
   .sf-catbody { grid-template-columns: 1fr; }
   .sf-catside { position: static; max-height: none; }
 }
+
+/* A page that opens with the band has no top padding of its own — the band is
+   the top of the page. */
+.sf-page.banded { padding-top: 0; }
+
+/* 4:3 keeps a tile readable at grid scale; 1:1 made every card tall enough to
+   push the second row off the fold. */
+.sf-cardimg { aspect-ratio: 4 / 3; }

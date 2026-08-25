@@ -66,22 +66,22 @@ export default function CatalogueBrowser({ data }: { data: CatalogueData }) {
   const activeCat = cat === null ? null : data.categories.find((c) => c.id === cat);
 
   return (
-    <main className="sf-page">
+    <main className="sf-page banded">
       {/* The band carries the home screen's world into the shop, then hands over
           to light for the browsing itself. The evidence ladder lives inside it
           as a row of figures rather than six boxes: it is the page's argument,
           and it is also the primary filter. */}
-      <header className="sf-hero">
-        <div className="sf-heroin">
-          <div className="sf-herokicker">Catalogue</div>
+      <header className="sf-band">
+        <div className="sf-bandin">
+          <div className="sf-bandkicker">Catalogue</div>
           <h1 className="wide">Everything we are looking at — and what we have actually checked.</h1>
-          <p className="sf-herolede">
+          <p className="sf-bandlede">
             Each product carries its evidence state, openly: what we have verified ourselves, what we
             have only sourced, and what is still on the research list. Nothing here is dressed up as
             more settled than it is.
           </p>
 
-          <div className="sf-herostats" role="group" aria-label="Filter by evidence state">
+          <div className="sf-bandstats" role="group" aria-label="Filter by evidence state">
             {EVIDENCE_ORDER.map((s) => {
               const meta = EVIDENCE_META[s];
               const on = states.has(s);
@@ -89,7 +89,7 @@ export default function CatalogueBrowser({ data }: { data: CatalogueData }) {
                 <button
                   key={s}
                   type="button"
-                  className={`sf-herostat${on ? " on" : ""}`}
+                  className={`sf-bandstat${on ? " on" : ""}`}
                   onClick={() => toggleState(s)}
                   title={meta.blurb}
                   aria-pressed={on}
