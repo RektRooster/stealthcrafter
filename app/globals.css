@@ -4821,8 +4821,17 @@ table.cc-comp-flagtable { min-width: 760px; }
 .cc-shell:has(.sf-live) .cc-body { min-height: 0; display: flex; flex-direction: column; }
 .cc-shell:has(.sf-live) .sf-live { flex: 1 1 auto; min-height: 0; }
 
-.sf-live-canvas { position: absolute; inset: 0; }
-.sf-live-canvas canvas { outline: none; }
+/* Child selector, not a bare class. MapLibre's own stylesheet carries
+   `.maplibregl-map { position: relative }` and loads after this file, so a
+   single-class rule here loses the cascade and the container collapses to
+   zero height — a full-screen map that renders nothing at all. */
+.sf-live > .sf-live-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.sf-live > .sf-live-canvas canvas { outline: none; }
 
 /* Edge darkening. Panels sit in the darkest part of the frame, the middle of
    the continent stays bright. */
