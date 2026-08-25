@@ -107,9 +107,10 @@ export default async function CountryConditions({ params }: { params: Promise<{ 
                 <>
                   Official civil-protection alerts here are delivered straight to handsets by cell
                   broadcast. There is nothing for us — or anyone else — to subscribe to, so we cannot
-                  mirror them. <strong>Make sure emergency alerts are switched on in your phone
-                  settings:</strong> that is the channel your government will actually use. What we
-                  watch on your behalf is set out below.
+                  mirror them. That makes one setting on your phone more important than anything on
+                  this page: <strong>check that emergency alerts are switched on</strong>, because
+                  that is the channel your government will actually use. What we watch on your behalf
+                  is set out below.
                 </>
               )}
             </p>
@@ -124,7 +125,15 @@ export default async function CountryConditions({ params }: { params: Promise<{ 
           {c.coverage.map((row) => (
             <article
               key={row.kind}
-              className={`sf-cccov${row.carried.length ? " has" : row.notFound ? " none" : " nofeed"}`}
+              className={`sf-cccov${
+                row.carried.length
+                  ? " has"
+                  : row.notFound
+                  ? " none"
+                  : row.available.length
+                  ? " avail"
+                  : " nofeed"
+              }`}
             >
               <div className="sf-ccovtop">
                 <strong>{row.label}</strong>
@@ -133,6 +142,8 @@ export default async function CountryConditions({ params }: { params: Promise<{ 
                     ? `${row.carried.filter((x) => x.live).length}/${row.carried.length} reporting`
                     : row.noFeed.length
                     ? "no public feed"
+                    : row.available.length
+                    ? "found, not yet carried"
                     : "none found"}
                 </span>
               </div>
@@ -142,6 +153,11 @@ export default async function CountryConditions({ params }: { params: Promise<{ 
                   {s.licenceState === "pending" && (
                     <em> · licence confirmation in progress</em>
                   )}
+                </p>
+              ))}
+              {row.available.map((s) => (
+                <p key={s.authority} className="sf-ccsrc muted">
+                  {s.authority} — {s.why}.
                 </p>
               ))}
               {row.noFeed.map((s) => (

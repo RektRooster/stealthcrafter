@@ -50,6 +50,10 @@ export type CoverageRow = {
   label: string;
   /** Feeds we are actually carrying for this kind. */
   carried: { authority: string; attribution: string | null; licenceState: string; live: boolean }[];
+  /** Researched, usable, built — but not switched on yet. Saying "none found"
+      about a source that is sitting in the register would be a lie, and a
+      lazy-looking one. */
+  available: { authority: string; why: string }[];
   /** The authority whose warnings exist but are not machine-readable. */
   noFeed: { authority: string; why: string }[];
   /** We looked and found nothing at all. */
@@ -128,14 +132,45 @@ export async function getCountryConditions(iso2: string): Promise<CountryConditi
         live: liveIds.has(f.id),
       }));
 
+    const carriedIds = new Set(carried.map((c) => c.authority));
+
+    // Researched and reachable, but not running yet — either because a licence
+    // or key is outstanding, or simply because it is further down the build
+    // order. Both are honest answers; "none found" is not.
+    const available = forKind
+      .filter(
+        (f) =>
+          !carriedIds.has(f.authority) &&
+          f.register_status !== "NOT-FOUND" &&
+          f.register_status !== "NO-PUBLIC-FEED"
+      )
+      .map((f) => ({
+        authority: f.authority,
+        why:
+          f.licence_state === "blocked"
+            ? "the licence does not permit our use"
+            : f.access_state === "needs-contract"
+            ? "needs a signed agreement"
+            : f.access_state === "needs-key"
+            ? "needs an API key"
+            : f.access_state === "needs-registration"
+            ? "needs an account"
+            : f.licence_state === "unknown"
+            ? "licence not established"
+            : "built, not yet switched on",
+      }));
+
     const noFeed = forKind
       .filter((f) => f.register_status === "NO-PUBLIC-FEED")
       .map((f) => ({ authority: f.authority, why: shorten(f.notes) }));
 
     const notFound =
-      !carried.length && !noFeed.length && forKind.every((f) => f.register_status === "NOT-FOUND");
+      !carried.length &&
+      !available.length &&
+      !noFeed.length &&
+      forKind.every((f) => f.register_status === "NOT-FOUND");
 
-    coverage.push({ kind, label: FEED_KIND_WORD[kind] || kind, carried, noFeed, notFound });
+    coverage.push({ kind, label: FEED_KIND_WORD[kind] || kind, carried, available, noFeed, notFound });
   }
 
   // The national civil-protection system, named. If there is a machine-readable

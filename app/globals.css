@@ -5339,3 +5339,4 @@ table.cc-comp-flagtable { min-width: 760px; }
 .sf-ccsrc.muted { color: var(--sc-fg-4); }
 .sf-ccsrc em { font-style: normal; color: var(--sc-fg-4); }
 a.sf-live-chip { text-decoration: none; }
+.sf-cccov.avail { border-left: 3px solid #0072B2; }
