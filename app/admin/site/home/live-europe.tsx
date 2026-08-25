@@ -341,6 +341,12 @@ export default function LiveEurope({
 
   const available = useMemo(() => new Set(events.map((e) => e.source)), [events]);
   const liveSources = sources.filter((s) => s.state === "live");
+  /* Both tiers count. The five pan-European adapters are sources; the national
+     authorities behind the ingest spine are feeds, and there are now forty of
+     them. Reporting "3 feeds" while forty-one are answering understates the
+     thing this page is actually for. */
+  const reporting = liveSources.length + feeds.filter((f) => f.state === "live" || f.state === "quiet").length;
+  const stale = feeds.filter((f) => f.state === "stale").length;
   const severeCount = useMemo(() => events.filter((e) => e.severity === "severe").length, [events]);
 
   const shown = useMemo(
@@ -880,12 +886,24 @@ export default function LiveEurope({
             <strong>{severeCount}</strong> need action
           </span>
         )}
-        <span className="sf-live-srcdots" title={`${liveSources.length} feeds reporting`}>
+        <span
+          className="sf-live-srcdots"
+          title={`${reporting} feeds reporting across ${new Set(feeds.map((f) => f.country).filter(Boolean)).size} countries${
+            stale ? `; ${stale} not updating` : ""
+          }`}
+        >
           {liveSources.map((s) => (
             <i key={s.source} data-src={s.source} />
           ))}
-          {liveSources.length} feeds
+          {reporting} feeds
         </span>
+        {stale > 0 && (
+          /* A feed that stopped publishing looks exactly like a calm country
+             unless we say so. SC 13 found members quiet for weeks. */
+          <span className="sf-live-stat" title="Feeds that have not updated within three times their own cadence">
+            <strong>{stale}</strong> not updating
+          </span>
+        )}
         <span className="sf-live-when">updated {timeAgo(generatedAt)}</span>
         <span className="sf-live-spacer" />
         {country && (
