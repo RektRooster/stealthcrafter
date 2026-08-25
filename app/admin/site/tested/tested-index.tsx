@@ -46,7 +46,7 @@ export default function TestedIndexView({ data }: { data: TestedIndex }) {
       <header className="sf-band">
         <div className="sf-bandin">
           <div className="sf-bandkicker">Tested Reports</div>
-          <h1>Nothing reaches this shop without earning it.</h1>
+          <h1 className="wide">Nothing reaches this shop without earning it.</h1>
           <p className="sf-bandlede">
             Every product runs the same protocol — the same checkpoints, in the same order, under
             recorded conditions. We write down what we expect{" "}

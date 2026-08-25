@@ -5639,3 +5639,37 @@ a.sf-live-chip { text-decoration: none; }
 /* Section headings across the storefront: a quiet rule rather than a boxed
    header, so the eye goes to the content. */
 .sf-catwrap h2, .sf-kbwrap h2 { letter-spacing: -0.01em; }
+
+/* 17ch was too tight: a headline of short words broke into a ragged three-line
+   column. 21ch keeps a strong measure without shredding it. */
+.sf-band h1 { max-width: 21ch; }
+.sf-band h1.wide { max-width: 28ch; }
+
+/* Panels missed by the first pass. Found by looking at the deployed page
+   rather than by grepping for borders, which is why they were missed. */
+.sf-h2h,
+.sf-panelbox,
+.sf-treports > *,
+.sf-guideempty {
+  border: none !important;
+  border-radius: var(--sf-radius);
+  background: var(--sc-surface);
+  box-shadow: var(--sf-lift-1);
+}
+.sf-panelbox.accent { box-shadow: var(--sf-lift-1), inset 3px 0 0 var(--sc-brass-fill); }
+.sf-treports { display: grid; gap: 18px; }
+.sf-h2h { padding: 22px 24px; }
+.sf-h2hhead h2 { margin-top: 0; }
+
+/* Category filter chips: pills with lift, matching the catalogue's language. */
+.sf-catwrap .sf-hz-layer,
+.sf-kbwrap .sf-hz-layer {
+  border: none; border-radius: 999px; padding: 8px 15px;
+  background: var(--sc-surface); box-shadow: var(--sf-lift-1);
+  color: var(--sc-fg-2); font-size: 12px;
+}
+.sf-catwrap .sf-hz-layer.on,
+.sf-kbwrap .sf-hz-layer.on {
+  background: var(--sc-brass-soft); color: var(--sc-brass-3);
+  box-shadow: var(--sf-lift-1), inset 0 0 0 1px var(--sc-brass-line);
+}
