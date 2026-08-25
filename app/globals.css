@@ -5267,3 +5267,75 @@ table.cc-comp-flagtable { min-width: 760px; }
 .sf-live-credit {
   margin: 10px 0 0; font-size: 10px; line-height: 1.5; color: var(--fg-3);
 }
+
+/* ============================================================
+   COUNTRY CONDITIONS — per-country pages.
+   The coverage block is the point of these: most European states
+   warn by cell broadcast and publish nothing machine-readable,
+   and saying so plainly is worth more than quietly showing less.
+   ============================================================ */
+.sf-ccgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 12px; }
+
+.sf-cccard {
+  display: flex; flex-direction: column; gap: 4px; text-decoration: none;
+  border: 1px solid var(--sc-line-soft); border-radius: 10px; padding: 14px 15px;
+  background: var(--sc-surface-2); transition: border-color .14s ease, transform .14s ease;
+}
+.sf-cccard:hover { border-color: rgba(226,199,146,.5); transform: translateY(-1px); }
+.sf-cciso {
+  font-size: 9.5px; letter-spacing: .18em; color: var(--sc-brass); font-weight: 700;
+}
+.sf-cccard strong { font-size: 14px; font-weight: 600; color: var(--sc-fg); }
+.sf-ccmeta { font-size: 11.5px; color: var(--sc-fg-4); }
+
+/* ---- active alerts ---- */
+.sf-ccalerts { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.sf-ccalert {
+  border: 1px solid var(--sc-line-soft); border-left: 3px solid var(--sev, #888);
+  border-radius: 10px; padding: 13px 15px; background: var(--sc-surface-2);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.sf-ccatop { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.sf-ccasev {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--sev);
+}
+.sf-ccaup { font-size: 10px; color: var(--sc-fg-4); }
+.sf-ccalert strong { font-size: 13.5px; font-weight: 600; line-height: 1.4; color: var(--sc-fg); }
+.sf-ccarea { font-size: 11.5px; color: var(--sc-fg-2); }
+.sf-ccainstr {
+  padding: 9px 11px; border-radius: 7px; background: var(--sc-surface-3);
+}
+.sf-ccainstr span {
+  display: block; font-size: 9px; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--sc-fg-4); margin-bottom: 4px;
+}
+.sf-ccainstr p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--sc-fg); }
+.sf-ccameta { font-size: 10.5px; color: var(--sc-fg-4); margin-top: auto; }
+
+/* ---- national system ---- */
+.sf-ccsystem {
+  border: 1px solid rgba(214,94,0,.35); border-radius: 10px; padding: 16px 18px;
+  background: rgba(214,94,0,.06); max-width: 780px;
+}
+.sf-ccsystem.ok { border-color: rgba(0,158,115,.4); background: rgba(0,158,115,.06); }
+.sf-ccsystem strong { display: block; font-size: 14px; color: var(--sc-fg); margin-bottom: 7px; }
+.sf-ccsystem p { margin: 0 0 8px; font-size: 13px; line-height: 1.65; color: var(--sc-fg-2); }
+.sf-ccsystem p:last-child { margin-bottom: 0; }
+.sf-ccnote { font-size: 11.5px !important; color: var(--sc-fg-4) !important; }
+
+/* ---- coverage ---- */
+.sf-cccov {
+  border: 1px solid var(--sc-line-soft); border-radius: 10px; padding: 13px 15px;
+  background: var(--sc-surface-2);
+}
+.sf-cccov.has { border-left: 3px solid #009E73; }
+.sf-cccov.nofeed { border-left: 3px solid #E69F00; }
+.sf-cccov.none { border-left: 3px solid var(--sc-line-soft); opacity: .8; }
+.sf-ccovtop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.sf-ccovtop strong { font-size: 13px; font-weight: 600; color: var(--sc-fg); }
+.sf-ccovtop span { font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--sc-fg-4); }
+.sf-ccsrc { margin: 0 0 5px; font-size: 11.5px; line-height: 1.5; color: var(--sc-fg-2); }
+.sf-ccsrc.muted { color: var(--sc-fg-4); }
+.sf-ccsrc em { font-style: normal; color: var(--sc-fg-4); }
+a.sf-live-chip { text-decoration: none; }

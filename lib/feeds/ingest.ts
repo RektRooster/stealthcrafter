@@ -24,6 +24,7 @@ import { createHash } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { parserFor, hasParser } from "./parsers";
 import { mayDisplay } from "./types";
+import { resolveArea } from "@/lib/geo/regions";
 import type { Alert, Feed, FeedRun, FeedRunStatus } from "./types";
 
 const USER_AGENT = "StealthCrafter/1.0 (+https://stealthcrafter.com; ops@stealthcrafter.com)";
@@ -150,10 +151,28 @@ export async function runFeed(feed: Feed): Promise<FeedRun> {
     );
   }
 
+  // Most CAP alerts identify their area by CODE, not by polygon. Where the code
+  // is one we hold geometry for, the shape is attached here, once, at ingest —
+  // so it is stored with the alert and queryable, rather than recomputed on
+  // every render. Codes we cannot draw are left alone: the alert keeps the
+  // authority's own area name and is never given an approximate shape.
+  let drawn = 0;
+  for (const a of parsed.alerts) {
+    if (a.area.geom) continue;
+    const r = resolveArea(a.area.geocodes);
+    if (!r) continue;
+    a.area.geom = r.geom;
+    a.area.bbox = r.bbox;
+    a.area.lat = r.lat;
+    a.area.lon = r.lon;
+    drawn++;
+  }
+
   const written = await writeAlerts(feed, parsed.alerts);
   await touchFeed(feed.id, "ok", hash, true);
   const note = parsed.skipped ? ` (${parsed.skipped} skipped)` : "";
-  return done("ok", written, `${written} alerts${note}`, hash);
+  const geo = drawn ? `, ${drawn} area shapes resolved` : "";
+  return done("ok", written, `${written} alerts${note}${geo}`, hash);
 }
 
 /* ------------------------------------------------------------------ */

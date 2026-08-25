@@ -160,6 +160,7 @@ const SF_TABS = [
   { href: "/admin/site/kit-builder", label: "Kit Builder" },
   { href: "/admin/site/tested", label: "Tested Reports" },
   { href: "/admin/site/dashboard", label: "My Dashboard" },
+  { href: "/admin/site/conditions", label: "By Country" },
   { href: "/admin/site/sources", label: "Sources" },
 ];
 

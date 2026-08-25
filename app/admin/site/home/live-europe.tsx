@@ -907,9 +907,18 @@ export default function LiveEurope({
         <span className="sf-live-when">updated {timeAgo(generatedAt)}</span>
         <span className="sf-live-spacer" />
         {country && (
-          <button type="button" className="sf-live-chip on" onClick={() => setCountry(null)}>
-            {countryName(country)} <b>✕</b>
-          </button>
+          <>
+            <Link
+              href={`/admin/site/conditions/${country.toLowerCase()}`}
+              className="sf-live-chip on"
+              title={`Everything we watch in ${countryName(country)}, and what we cannot`}
+            >
+              Full picture for {countryName(country)} →
+            </Link>
+            <button type="button" className="sf-live-chip" onClick={() => setCountry(null)}>
+              Clear <b>✕</b>
+            </button>
+          </>
         )}
         <Link href="/admin/site/catalogue" className="sf-live-cta">
           Browse equipment
