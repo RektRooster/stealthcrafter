@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/admin/feeds/sweep?limit=60",
-      "schedule": "*/10 * * * *"
-    }
-  ]
-}
