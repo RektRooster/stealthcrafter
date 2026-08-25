@@ -4684,3 +4684,9 @@ table.cc-comp-flagtable { min-width: 760px; }
   .sf-dashgrid { grid-template-columns: 1fr; }
   .sf-jp { position: static; }
 }
+
+/* In the dashboard the map and its event rail share a row — keep the rail from
+   outgrowing the map and leaving a well of empty space beside it. */
+.sf-hz.compact .sf-hz-body { align-items: start; }
+.sf-hz.compact .sf-hz-list { max-height: 300px; }
+.sf-hz.compact .sf-hz-legend { margin-top: 8px; }
