@@ -39,10 +39,12 @@ export default function MarketPicker({ initial, active, onPick }: Props) {
   // interrogate. `initial` comes from the server, so the button is right on
   // the first paint rather than after a flash of the default.
   const [open, setOpen] = useState(false);
-  // Un-chosen is the state worth drawing attention to — once.
-  const inviting = initial === null && current === null;
   const [q, setQ] = useState("");
   const [current, setCurrent] = useState<string | null>(initial);
+  // Un-chosen is the state worth drawing attention to — once. Declared AFTER
+  // `current`, which is not a style point: reading it above its own const is a
+  // temporal dead zone error that takes the whole page down at hydration.
+  const inviting = initial === null && current === null;
   const boxRef = useRef<HTMLDivElement | null>(null);
   // Portalled to <body>, and this is not optional. The chooser button lives in
   // the status strip, and that strip has `backdrop-filter` — which makes it a
