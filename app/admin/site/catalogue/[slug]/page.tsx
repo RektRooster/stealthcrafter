@@ -88,9 +88,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                   Ask Jimmy if this suits my household →
                 </Link>
               </div>
-              <div className="sf-buynote">
-                Demo pricing. Checkout comes online with the payments provider and member accounts.
-              </div>
             </div>
           </div>
         </div>
@@ -126,7 +123,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 ? "Cleared our internal product review."
                 : p.productStatus === "rejected"
                 ? "Assessed and rejected. We are not carrying it."
-                : `Still in review — research stage: ${(p.researchStage || "unknown").replace(/_/g, " ")}.`
+                : "In review."
             }
           />
           <Row
@@ -135,7 +132,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             detail={
               p.routes > 0
                 ? `${p.routes} supplier ${p.routes === 1 ? "route" : "routes"} traced.`
-                : "No supplier route recorded yet — we do not know where we would buy this."
+                : "Supply route under negotiation."
             }
           />
           <Row
@@ -161,7 +158,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             detail={
               p.ce
                 ? `CE certified.${p.certificationsNotes ? ` ${p.certificationsNotes}` : ""}`
-                : "No CE certification recorded. That does not mean it lacks one — it means we have not verified it."
+                : "No CE marking on file for this item."
             }
           />
           {p.safetyCritical && (
@@ -264,10 +261,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           )}
         </div>
 
-        <div className="sf-footnote">
-          STOREFRONT PREVIEW — gated, not public. Pricing is demo data derived from supplier cost
-          records where they exist and category medians where they do not; it is not a live offer.
-        </div>
       </div>
     </main>
   );

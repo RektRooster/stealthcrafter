@@ -142,12 +142,6 @@ export default async function GuideDetailPage({
           <span className="read">
             <MiniIcon name="clock" size={12} /> {g.read_min} min read
           </span>
-          {g.status === "DRAFT" ? (
-            <>
-              <span className="dot">·</span>
-              <span className="sf-kh-draft">Draft</span>
-            </>
-          ) : null}
         </div>
 
         <h1 className="sf-kh-arttitle">{g.title}</h1>
@@ -171,11 +165,6 @@ export default async function GuideDetailPage({
           </Link>
         </div>
 
-        <div className="sf-footnote">
-          STOREFRONT PREVIEW — guides are drafts assembled from the SC 03
-          knowledge packs, pending panel sign-off (SC 08). Copy and art pending
-          SC 09.
-        </div>
       </article>
     </main>
   );

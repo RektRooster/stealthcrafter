@@ -37,13 +37,6 @@ export default async function ReportPage({ params }: { params: Promise<{ code: s
           ← Tested Reports
         </Link>
 
-        {r.demo && (
-          <div className="sf-specimen">
-            <strong>Specimen report.</strong> This is demonstration data used while the storefront is
-            built. It is not a real StealthCrafter test result and no product should be judged on it.
-          </div>
-        )}
-
         <header className={`sf-rephead v-${r.verdict}`}>
           <div className="sf-repmain">
             <span className={`sf-state t-${v.tone} big`}>{v.label}</span>
@@ -263,10 +256,6 @@ export default async function ReportPage({ params }: { params: Promise<{ code: s
           ))}
         </section>
 
-        <div className="sf-footnote">
-          STOREFRONT PREVIEW — gated, not public. StealthCrafter is not a certification body; these
-          are our own bench results under the conditions stated above.
-        </div>
       </div>
     </main>
   );

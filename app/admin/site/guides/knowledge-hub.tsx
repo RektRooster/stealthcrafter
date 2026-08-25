@@ -233,11 +233,7 @@ export default function KnowledgeHub({
                     <h3>{g.title}</h3>
                     <p>{g.summary}</p>
                     <div className="foot">
-                      {g.status === "DRAFT" ? (
-                        <span className="sf-kh-draft">Draft</span>
-                      ) : (
-                        <span />
-                      )}
+                      <span />
                       <span className="go" aria-hidden="true">
                         <MiniIcon name="arrow" size={16} />
                       </span>
@@ -282,11 +278,6 @@ export default function KnowledgeHub({
           ))}
         </section>
 
-        <div className="sf-footnote">
-          STOREFRONT PREVIEW — guides are drafts assembled from the SC 03
-          knowledge packs, pending panel sign-off (SC 08). Copy and art pending
-          SC 09.
-        </div>
       </div>
     </main>
   );

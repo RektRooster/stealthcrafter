@@ -220,7 +220,7 @@ export default function Portal({ data }: { data: PortalData }) {
                         <i style={{ background: PILLAR_COLOR[p] }} />
                         <div>
                           <strong>{p}</strong>
-                          <span>{a?.nextAction ?? "Not assessed — Jimmy can cover this in a few minutes."}</span>
+                          <span>{a?.nextAction ?? "Jimmy can cover this in a few minutes."}</span>
                         </div>
                         <em>{a ? a.score : "—"}</em>
                       </li>
@@ -393,7 +393,7 @@ export default function Portal({ data }: { data: PortalData }) {
                           day: "numeric",
                           month: "short",
                         })}`
-                      : "Not assessed yet"}
+                      : "Assessment in progress"}
                   </span>
                 </div>
               </div>
@@ -409,10 +409,6 @@ export default function Portal({ data }: { data: PortalData }) {
           </aside>
         </div>
 
-        <div className="sf-footnote">
-          STOREFRONT PREVIEW — gated, not public. Household switching stands in for member sign-in
-          until accounts are built; these are the SC 03 test households, not real customers.
-        </div>
       </div>
     </main>
   );

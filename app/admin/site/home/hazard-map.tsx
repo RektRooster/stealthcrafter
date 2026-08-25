@@ -13,6 +13,8 @@ type Props = {
   sources: SourceStatus[];
   generatedAt: string;
   byCountry: Record<string, { count: number; worst: number }>;
+  /** Dashboard mode: no page header, no source wall — the panel supplies those. */
+  compact?: boolean;
 };
 
 type View = { x: number; y: number; w: number; h: number };
@@ -81,6 +83,7 @@ export default function HazardMap({
   sources,
   generatedAt,
   byCountry,
+  compact = false,
 }: Props) {
   const FULL: View = useMemo(() => ({ x: 0, y: 0, w: width, h: height }), [width, height]);
   const AR = width / height;
@@ -354,7 +357,8 @@ export default function HazardMap({
   const labelCut = 2600 * k * k;       // reveal smaller countries as you go deeper
 
   return (
-    <div className="sf-hz">
+    <div className={`sf-hz${compact ? " compact" : ""}`}>
+      {!compact && (
       <div className="sf-hz-head">
         <div>
           <div className="sf-hz-kicker">Live · Europe</div>
@@ -374,6 +378,7 @@ export default function HazardMap({
           </div>
         </div>
       </div>
+      )}
 
       <div className="sf-hz-controls">
         {SOURCE_ORDER.map((src) => {
@@ -691,6 +696,7 @@ export default function HazardMap({
         </aside>
       </div>
 
+      {!compact && (
       <div className="sf-hz-sources">
         <div className="sf-hz-sourceshead">Where this comes from</div>
         <div className="sf-hz-sourcegrid">
@@ -714,6 +720,7 @@ export default function HazardMap({
           })}
         </div>
       </div>
+      )}
     </div>
   );
 }

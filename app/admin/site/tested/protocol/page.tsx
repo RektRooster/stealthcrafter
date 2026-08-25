@@ -85,10 +85,6 @@ export default async function ProtocolPage() {
           </div>
         ))}
 
-        <div className="sf-footnote">
-          STOREFRONT PREVIEW — gated, not public. StealthCrafter is not a certification body; this is
-          our own bench protocol.
-        </div>
       </div>
     </main>
   );

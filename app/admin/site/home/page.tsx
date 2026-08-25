@@ -1,125 +1,170 @@
 import Link from "next/link";
 import { getEuroMapData } from "@/lib/euro-map";
 import { getHazardSnapshot, summarise } from "@/lib/hazards";
-import { getHomeData } from "@/lib/home-data";
+import { getHomeDashboard } from "@/lib/home-dashboard";
 import HazardMap from "./hazard-map";
-import JimmyStarter from "./jimmy-starter";
+import JimmyPanel from "./jimmy-panel";
 
 export const dynamic = "force-dynamic";
 
-// STOREFRONT PREVIEW — customer homepage.
-//
-// Rebuilt around a live European conditions map. The reasoning: the brand
-// promise is "knowledge before commerce", and the honest way to open is to
-// show what is actually happening on the continent this minute, from named
-// public sources, then offer one next step — Jimmy.
-//
-// Nothing on this page is illustrative. Live counts that are still zero are
-// suppressed; guides appear only once SIGNED; a hazard source that cannot be
-// reached says so in its own words rather than quietly vanishing.
-export default async function StorefrontHomePage() {
+const PILLAR_TONE: Record<string, string> = {
+  Water: "#5fa8d3",
+  Food: "#8fbf6a",
+  Fire: "#f5913c",
+  Shelter: "#c9a9d3",
+  Medical: "#e0655f",
+};
+
+function eur(n: number | null): string {
+  if (n === null) return "";
+  return `€${n.toLocaleString("en-IE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function when(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+// CUSTOMER HOME — one page, app-like. Live European conditions at the centre,
+// Jimmy in the sidebar, knowledge and tested equipment beneath.
+export default async function HomePage() {
   const map = getEuroMapData();
-  const [snapshot, home] = await Promise.all([getHazardSnapshot(), getHomeData()]);
-  const { byCountry } = summarise(snapshot.events);
+  const [snapshot, dash] = await Promise.all([getHazardSnapshot(), getHomeDashboard()]);
+  const { byCountry, severe } = summarise(snapshot.events);
+
+  const liveSources = snapshot.sources.filter((s) => s.state === "live");
+
+  const stats = [
+    { label: "Products assessed", value: dash.stats.products.toLocaleString("en-GB") },
+    { label: "European markets", value: String(dash.stats.markets) },
+    { label: "Suppliers traced", value: String(dash.stats.suppliers) },
+    { label: "Test checkpoints run", value: dash.stats.checkpoints.toLocaleString("en-GB") },
+  ];
 
   return (
-    <main className="sf-page">
-      <div className="sf-inner">
-        <section className="sf-hero">
-          <h1>Protect the people you love.</h1>
-          <p className="sf-sub">
-            Every family is different. Let&apos;s build the preparedness system that&apos;s right
-            for yours.
-          </p>
-          <JimmyStarter />
-          <div className="sf-rule" />
-        </section>
+    <main className="sf-dash">
+      {/* ---------- status strip ---------- */}
+      <div className="sf-dashbar">
+        <span className="sf-dashlive">
+          <i />
+          Live across Europe
+        </span>
+        <span>
+          <strong>{snapshot.events.length}</strong> conditions tracked
+        </span>
+        {severe > 0 && (
+          <span className="sev">
+            <strong>{severe}</strong> requiring action
+          </span>
+        )}
+        <span className="sf-dashsrc">
+          {liveSources.map((s) => (
+            <i key={s.source} className="sf-hz-layerdot" data-src={s.source} title={s.label} />
+          ))}
+          {liveSources.length} sources
+        </span>
+        <Link href="/admin/site/catalogue" className="sf-dashcta">
+          Browse equipment →
+        </Link>
       </div>
 
-      <section className="sf-wide">
-        <HazardMap
-          width={map.width}
-          height={map.height}
-          countries={map.countries}
-          events={snapshot.events}
-          sources={snapshot.sources}
-          generatedAt={snapshot.generatedAt}
-          byCountry={byCountry}
-        />
-      </section>
+      <div className="sf-dashgrid">
+        <JimmyPanel stats={stats} />
 
-      <div className="sf-inner">
-        <section className="sf-strips">
-          <div className="sf-strip">
-            <h3>Learn</h3>
-            <p>
-              Understand the risks and the concepts — explained as they become relevant, inside the
-              conversation, never as a hurdle before you can act.
-            </p>
-          </div>
-          <div className="sf-strip">
-            <h3>Assess</h3>
-            <p>
-              Jimmy understands your household, environment and likely risks before recommending
-              anything — gradually building your Preparedness Profile.
-            </p>
-          </div>
-          <div className="sf-strip">
-            <h3>Build &middot; Maintain</h3>
-            <p>
-              Assemble the right preparedness system for your family, then keep it current over the
-              long term — not a shopping basket, a system.
-            </p>
-          </div>
-        </section>
-
-        {home.stats.length > 0 && (
-          <section className="sf-proof">
-            {home.stats.map((s) => (
-              <div key={s.label} className="sf-proofitem">
-                <strong>{s.value.toLocaleString("en-GB")}</strong>
-                <span className="sf-prooflabel">{s.label}</span>
-                <span className="sf-proofnote">{s.note}</span>
-              </div>
-            ))}
+        <div className="sf-dashmain">
+          {/* ---------- live map ---------- */}
+          <section className="sf-dashpanel wide">
+            <div className="sf-dashpanelhead">
+              <h2>Europe, right now</h2>
+              <p>Wildfire, seismic, major-disaster, grid and transport conditions, read live.</p>
+            </div>
+            <HazardMap
+              compact
+              width={map.width}
+              height={map.height}
+              countries={map.countries}
+              events={snapshot.events}
+              sources={snapshot.sources}
+              generatedAt={snapshot.generatedAt}
+              byCountry={byCountry}
+            />
           </section>
-        )}
 
-        <section className="sf-guides">
-          <div className="sf-guideshead">
-            <h2>Start with the knowledge</h2>
-            <Link href="/admin/site/guides" className="sf-guidesall">
-              All guides →
-            </Link>
-          </div>
-          {home.guides.length ? (
-            <div className="sf-guidegrid">
-              {home.guides.map((g) => (
-                <Link key={g.slug} href={`/admin/site/guides/${g.slug}`} className="sf-guidecard">
-                  <span className="sf-guidepillar">{g.pillar || g.category}</span>
+          {/* ---------- knowledge ---------- */}
+          <section className="sf-dashpanel">
+            <div className="sf-dashpanelhead">
+              <h2>Knowledge first</h2>
+              <Link href="/admin/site/guides">All guides →</Link>
+            </div>
+            <div className="sf-dashguides">
+              {dash.guides.map((g) => (
+                <Link key={g.slug} href={`/admin/site/guides/${g.slug}`} className="sf-dashguide">
+                  <span
+                    className="sf-dashpill"
+                    style={{ color: PILLAR_TONE[g.pillar ?? ""] ?? "#c6a15b" }}
+                  >
+                    {g.pillar || g.category}
+                  </span>
                   <strong>{g.title}</strong>
                   <p>{g.summary}</p>
-                  <span className="sf-guidemin">{g.read_min} min read</span>
+                  <span className="sf-dashmin">{g.readMin} min read</span>
                 </Link>
               ))}
             </div>
-          ) : (
-            <div className="sf-guideempty">
-              <strong>No guides are signed off for publication yet.</strong>
-              <p>
-                {home.guidesTotal > 0
-                  ? `${home.guidesTotal} guides are drafted and in safety review. They appear here once signed — nothing reaches this page before it has been reviewed.`
-                  : "Guides appear here once they have been written and signed off."}{" "}
-                <Link href="/admin/site/guides">See the Knowledge Hub →</Link>
-              </p>
-            </div>
-          )}
-        </section>
+          </section>
 
-        <div className="sf-footnote">
-          STOREFRONT PREVIEW — copy and design pending SC 09 brand pass. Hazard data is supplied by
-          EFFIS/Copernicus, EMSC, GDACS, ENTSO-E and national transport authorities; StealthCrafter
-          is not an emergency service. In an emergency, contact 112.
+          {/* ---------- tested ---------- */}
+          <section className="sf-dashpanel">
+            <div className="sf-dashpanelhead">
+              <h2>Tested by us</h2>
+              <Link href="/admin/site/tested">All reports →</Link>
+            </div>
+            <div className="sf-dashtested">
+              {dash.tested.map((t) => (
+                <Link key={t.code} href={`/admin/site/tested/${t.code}`} className="sf-dashtest">
+                  <div className="sf-dashtestimg">
+                    {t.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={t.image} alt="" width={200} height={150} decoding="async" />
+                    ) : null}
+                  </div>
+                  <div className="sf-dashtestbody">
+                    {t.brand && <span className="sf-cardbrand">{t.brand}</span>}
+                    <strong>{t.product}</strong>
+                    <div className="sf-dashtestscore">
+                      <span className="ok">
+                        {t.passed}/{t.total}
+                      </span>
+                      checkpoints met · {when(t.when)}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          {/* ---------- equipment ---------- */}
+          <section className="sf-dashpanel">
+            <div className="sf-dashpanelhead">
+              <h2>Equipment we stand behind</h2>
+              <Link href="/admin/site/catalogue">Full catalogue →</Link>
+            </div>
+            <div className="sf-dashheroes">
+              {dash.heroes.map((p) => (
+                <Link key={p.slug} href={`/admin/site/catalogue/${p.slug}`} className="sf-dashhero">
+                  <div className="sf-dashheroimg">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.image!} alt="" width={240} height={180} decoding="async" />
+                  </div>
+                  <strong>{p.name}</strong>
+                  <span className="sf-dashherometa">
+                    {p.category}
+                    {p.price !== null ? ` · ${eur(p.price)}` : ""}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
         </div>
       </div>
     </main>

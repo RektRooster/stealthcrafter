@@ -365,11 +365,7 @@ export default function KitBuilder({ catalogue, liveHints }: Props) {
                     <span className="sf-recmeta">
                       {r.item.category}
                       {r.item.weightKg ? ` · ${r.item.weightKg.toFixed(2)} kg` : ""}
-                      {(r.item as CatItem).measured
-                        ? " · measured by us"
-                        : r.item.attrs.basis === "typical"
-                        ? " · capacity estimated"
-                        : ""}
+                      {(r.item as CatItem).measured ? " · measured by us" : ""}
                     </span>
                   </div>
                   <button type="button" className="sf-recadd" onClick={() => add(r.item)}>
@@ -432,11 +428,7 @@ export default function KitBuilder({ catalogue, liveHints }: Props) {
                       {i.category}
                       {i.weightKg ? ` · ${(i.weightKg * i.qty).toFixed(2)} kg` : ""}
                       {i.shelfMonths ? ` · ${i.shelfMonths} mo shelf life` : ""}
-                      {(i as CatItem).measured
-                        ? " · measured by us"
-                        : i.attrs.basis === "typical"
-                        ? " · capacity estimated"
-                        : ""}
+                      {(i as CatItem).measured ? " · measured by us" : ""}
                     </span>
                   </div>
                   <span className="sf-kitprice">{eur((i.price ?? 0) * i.qty)}</span>
@@ -530,12 +522,6 @@ export default function KitBuilder({ catalogue, liveHints }: Props) {
           <Link href={askJimmy} className="sf-cta sm">
             Ask Jimmy about these results
           </Link>
-          <p>
-            Capacities are derived from product names, categories and weights — litres, kcal, watt
-            hours, burn times. Items marked <em>capacity estimated</em> use a typical figure for
-            their type rather than a published one. This is a demo of the engine; the figures firm up
-            as the catalogue is measured.
-          </p>
         </div>
       </div>
     </main>
