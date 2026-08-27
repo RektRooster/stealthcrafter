@@ -28,10 +28,22 @@ export type BasketIntent = {
   /** what the customer named, if they named anything */
   ref: string | null;
   qty: number;
+  /** true when a bare number could mean EITHER a quantity or a position in the
+      list we just showed — "yes add 2" against two options. Never guessed. */
+  numberAmbiguous: boolean;
 };
 
-const ADD =
+/* Two tiers, and the split matters.
+   STRONG works from a cold start because the customer said "basket" or "cart"
+   or "I'll take it" — the instruction is unambiguous on its own.
+   LOOSE is "add 2", "get me one", "grab the Vango": an instruction ONLY in the
+   light of something already on the table, so it is gated on that context.
+   This gate is the bug from live testing: "yes add 2" matched nothing, no tool
+   ran, and the model reported an add that had never happened. */
+const ADD_STRONG =
   /\b(add|put|chuck|stick|pop)\b[^.?!]{0,40}\b(basket|cart|order)\b|\b(basket|cart)\b[^.?!]{0,20}\b(please|it|that)\b|\bi(?:'| a)?ll take\b|\bbuy (?:it|that|this)\b/i;
+
+const ADD_LOOSE = /\b(?:add|get me|grab)\b/i;
 const VIEW =
   /\b(what(?:'s| is) in my|show me my|see my|check my|view my|open my)\s+(basket|cart)\b|\bmy basket\b|\bbasket total\b/i;
 const REMOVE =
@@ -73,12 +85,31 @@ function namedIn(message: string, carried: CatalogueHit[]): string | null {
   return quoted ? quoted[1] : null;
 }
 
-export function detectBasketIntent(message: string, carried: CatalogueHit[] = []): BasketIntent {
+/** A bare number with nothing marking it as a count — "add 2" rather than
+ *  "add 2 of them" or "2 × the Vango". Against a list, that is as likely to
+ *  mean "the second one". */
+function bareNumber(message: string): boolean {
+  if (!/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\b/i.test(message)) return false;
+  return !/\b(?:of (?:them|these|those|the)|units?|packs?|pieces?|x\s*\d|copies)\b/i.test(message);
+}
+
+export function detectBasketIntent(
+  message: string,
+  carried: CatalogueHit[] = [],
+  hasStandingOffer = false
+): BasketIntent {
   const qty = qtyIn(message);
-  if (REMOVE.test(message)) return { action: "remove", ref: namedIn(message, carried), qty };
-  if (ADD.test(message)) return { action: "add", ref: namedIn(message, carried), qty };
-  if (VIEW.test(message)) return { action: "view", ref: null, qty };
-  return { action: null, ref: null, qty: 1 };
+  const context = carried.length > 0 || hasStandingOffer;
+  const ambiguous = bareNumber(message) && carried.length > 1;
+
+  if (REMOVE.test(message))
+    return { action: "remove", ref: namedIn(message, carried), qty, numberAmbiguous: false };
+
+  if (ADD_STRONG.test(message) || (context && ADD_LOOSE.test(message)))
+    return { action: "add", ref: namedIn(message, carried), qty, numberAmbiguous: ambiguous };
+
+  if (VIEW.test(message)) return { action: "view", ref: null, qty, numberAmbiguous: false };
+  return { action: null, ref: null, qty: 1, numberAmbiguous: false };
 }
 
 /* ---------------- performing it ---------------- */
@@ -113,9 +144,11 @@ export async function runBasketTool(
 
   const head = "\n\n=== BASKET TOOL — THIS HAS ALREADY HAPPENED ===\n";
   const tail =
-    "\nTell the customer what happened in your own words, plainly and briefly. " +
+    "\nTell the customer what happened in your own words, plainly and briefly, AND say what the " +
+    "basket now holds — the count and the total, from the figures above. " +
     "Do not offer to add it 'if they would like' — it is already done. " +
-    "Do not invent items, prices or totals beyond what is written above. " +
+    "State the QUANTITY exactly as written above; if they asked for a number and it is not what " +
+    "went in, say the real one. Never invent items, prices, quantities or totals. " +
     "You may point them at the basket page to check out when it makes sense.\n";
 
   if (intent.action === "view") {
@@ -128,13 +161,23 @@ export async function runBasketTool(
   if (!ref) {
     if (carried.length === 1) ref = carried[0].name;
     else if (carried.length > 1) {
-      // Genuinely ambiguous. Asking is better than adding the wrong tent.
+      // Genuinely ambiguous. Asking is better than adding the wrong tent — and
+      // far better than the alternative we shipped, which was saying nothing
+      // ran and letting the model invent an outcome.
+      const numberNote = intent.numberAmbiguous
+        ? `They used the number ${intent.qty}, which against a list could mean "item ${intent.qty}" ` +
+          `OR "${intent.qty} of them". DO NOT PICK ONE — guessing costs them money.\n`
+        : "";
       return {
         block:
           head +
-          `The customer asked to ${intent.action} something, but did not say which — and ` +
-          `${carried.length} products were shown. NOTHING HAS BEEN CHANGED. Ask which one they ` +
-          `mean, listing them briefly by name:\n` +
+          `The customer asked to ${intent.action} something but did not say which, and ` +
+          `${carried.length} products are on the table. NOTHING HAS BEEN CHANGED — say nothing that ` +
+          `implies anything was added.\n` +
+          numberNote +
+          `Ask which one they mean, BY NAME. Do not number them and do not ask for a number back — ` +
+          `each of these is already a card under your last reply with its own Add button, so the ` +
+          `shortest route is naming the one you would pick and letting them take it from there:\n` +
           carried.map((h) => `  - ${h.name} (${eur(h.price ?? 0)})`).join("\n") +
           "\n",
         changed: false,
@@ -180,5 +223,16 @@ export async function runBasketTool(
     out.product?.status && out.product.status !== "approved"
       ? `\nNote: ${out.product.name} is still ${out.product.status} — say so, briefly and without alarm.`
       : "";
-  return { block: head + out.message + statusNote + "\n" + basketSummary(out.view) + tail, changed: true };
+  // Two 2-person tents for a household of two is a misread, not a big order.
+  // Flag it rather than silently taking the money.
+  const qtyNote =
+    intent.qty > 1
+      ? `\nThey asked for ${intent.qty}. If ${intent.qty} of this looks like more than their ` +
+        `household needs — two tents that each sleep the whole family, say — mention it while you ` +
+        `confirm, and offer to drop it to one. Do not lecture; one clause is enough.`
+      : "";
+  return {
+    block: head + out.message + statusNote + qtyNote + "\n" + basketSummary(out.view) + tail,
+    changed: true,
+  };
 }

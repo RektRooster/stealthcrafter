@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import ProductCards, { type ChatProduct } from "./product-cards";
 import type { JimmyProfile } from "@/lib/jimmy/data";
 import {
   CRITICAL_CAP,
@@ -86,8 +87,9 @@ type CxMsg = {
   role: "user" | "jimmy" | "system";
   text: string;
   sources?: { id: string | number; pack: string; section: string | null }[];
-  /** product rows this answer was built from — separate from knowledge sources */
-  catalogue?: { name: string }[];
+  /** product rows this answer was built from — rendered as cards with their own
+      Add button, which is what removes the "add 2" ambiguity at source */
+  catalogue?: ChatProduct[];
   safetyTriggered?: boolean;
   pending?: boolean;
   scripted?: boolean;
@@ -589,6 +591,9 @@ export default function JimmyPreview({
               <div key={m.key} className={`cc-jcx-bubble ${m.role}`}>
                 <span className="who">{m.role === "user" ? "You" : m.role === "jimmy" ? "Jimmy" : "Note"}</span>
                 <div className="txt">{m.pending ? "Jimmy is thinking…" : m.text}</div>
+                {m.role === "jimmy" && !m.pending && (m.catalogue || []).length > 0 ? (
+                  <ProductCards products={m.catalogue as ChatProduct[]} />
+                ) : null}
                 {m.role === "jimmy" && !m.pending && !m.scripted ? (
                   <div className="src">{attribution(m)}</div>
                 ) : null}

@@ -15,7 +15,7 @@ import {
   searchCatalogue,
 } from "./catalogue-tool";
 import { capabilityBlock } from "./capabilities";
-import { detectBasketIntent, runBasketTool } from "./basket-tool";
+import { detectBasketIntent, runBasketTool, type BasketAction } from "./basket-tool";
 import {
   acceptanceBlock,
   acceptsOffer,
@@ -30,6 +30,7 @@ import {
   type BasketOffer,
 } from "./offer";
 import { basketView } from "../commerce/basket";
+import { eur } from "../commerce/vat";
 
 export type Tier = "GREEN" | "AMBER" | "RED";
 
@@ -296,6 +297,26 @@ async function alreadyHolds(
   }
 }
 
+/* Did the reply ASSERT that something went into the basket?
+ *
+ * Sentence-aware, because the difference between a claim and an offer is one
+ * clause: "I've added the Vango" is a claim; "let me know if you'd like the
+ * Vango added to your basket" contains the same words and is not. Overwriting a
+ * customer-facing message is a blunt instrument, so it only fires on an
+ * assertion with no conditional wrapper anywhere in that sentence. */
+const CLAIM_PATTERNS =
+  /\b(?:i(?:'ve| have)\s+(?:now\s+)?(?:added|put|popped)|(?:is|are)\s+now\s+in\s+your\s+basket|added\s+(?:it|that|them|these|those|two|three|four|\d+)\s+to\s+your\s+basket|in\s+your\s+basket\s+now)/i;
+
+const CONDITIONAL =
+  /\b(?:if you|would you|do you want|want me to|shall i|let me know|happy to|i can|i could|i'?ll\b|just say|say the word)\b/i;
+
+export function claimsAnAdd(text: string): boolean {
+  for (const sentence of text.split(/(?<=[.!?\n])\s+/)) {
+    if (CLAIM_PATTERNS.test(sentence) && !CONDITIONAL.test(sentence)) return true;
+  }
+  return false;
+}
+
 /* ---------- the pipeline ---------- */
 
 export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> {
@@ -545,11 +566,17 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
   let basketBlock = "";
   let basketChanged = false;
   let answerBlock = "";
+  /* Which tool ran, if any. Needed by the false-claim backstop: after a VIEW the
+     model has the real contents in front of it, so "the Vango is in your basket"
+     may be perfectly true even though nothing changed this turn. After a failed
+     add — or no tool at all — the same sentence is unfounded. */
+  let basketAction: BasketAction = null;
   try {
     const owner = { customerId: input.customerId ?? null, guestKey: input.guestKey ?? null };
-    const intent = detectBasketIntent(input.message, carried);
+    const intent = detectBasketIntent(input.message, carried, Boolean(standingOffer));
 
     if (intent.action) {
+      basketAction = intent.action;
       const done = await runBasketTool(owner, intent, input.message, carried);
       if (done) {
         basketBlock = done.block;
@@ -561,11 +588,12 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
       // in the basket is exactly the thing that was offered.
       const done = await runBasketTool(
         owner,
-        { action: "add", ref: standingOffer.productId, qty: 1 },
+        { action: "add", ref: standingOffer.productId, qty: 1, numberAmbiguous: false },
         input.message,
         carried
       );
       if (done) {
+        basketAction = "add";
         basketBlock = done.block;
         basketChanged = done.changed;
       }
@@ -653,14 +681,22 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     "general AI's guesswork.\n" +
     "4. Handing off to a person is for safety and for things only a human can settle — never a way to " +
     "avoid answering a question about our own products.\n" +
-    "5. OFFER, DO NOT WAIT TO BE ASKED. When you have genuinely landed on one product for this " +
-    "household, finish by offering to put it in their basket — once, in a sentence, in your own " +
-    "voice. Never make the same offer twice, never offer a list, and never offer something you do " +
-    "not believe suits them. Honest curation is the product; a sale you had to push is not.\n" +
-    "6. YOU CAN PUT THINGS IN THEIR BASKET. If they ask you to add, remove or show something, it is " +
-    "done before you see this — look for a BASKET TOOL block and report what it says. Never say you " +
-    "are unable to add something to a basket, and never say you have added something unless that " +
-    "block says you did.\n";
+    "5. THE BASKET IS NOT YOURS TO NARRATE. You may say something has been added, removed, or is in " +
+    "the basket ONLY if a BASKET TOOL block appears below saying so. No block means nothing " +
+    "happened, and you must not imply otherwise — not even softly, not even as 'I'll add that for " +
+    "you'. If they asked for something and no block appeared, say plainly that you did not catch " +
+    "which product they meant, and ask. Claiming an add that did not happen is the worst thing you " +
+    "can do here: it is a lie about their money, and they will find out at the basket page.\n" +
+    "6. DO NOT RAISE THE BASKET UNPROMPTED. Offer to add something only when an OFFER block below " +
+    "says you may, and then exactly as it says — once, ONE named product, in your own words. With " +
+    "no such block: do not ask 'would you like me to add one of these', do not close with 'let me " +
+    "know if you want it in your basket', and NEVER offer a list for them to pick from. Listing " +
+    "options is answering; asking which to buy is selling, and you only sell when told you may.\n" +
+    "7. EVERY PRODUCT YOU MENTION APPEARS BENEATH YOUR REPLY AS A CARD — picture, price, and its " +
+    "own Add button. So: never number your options and ask them to reply with a number, never ask " +
+    "'shall I add 1 or 2', and never tell them to click, tap or press anything. Talk about the " +
+    "products the way a person would; the cards do the rest. If you name a product they can act on " +
+    "it without typing another word.\n";
 
   const instruction = strict
     ? "Answer ONLY from the grounded chunks above. If they don't cover it, say you don't want to guess and offer a person. "
@@ -743,6 +779,59 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
   display = display.replace(/<offer>[\s\S]*?<\/offer>/gi, "").trim();
   if (offerMatch && nominable && !newOffer) {
     newOffer = resolveNomination(offerMatch[1], nominable);
+  }
+
+  /* THE FALSE-CLAIM BACKSTOP.
+   *
+   * Live testing produced the worst possible failure: "I've added two Vango
+   * Banshee Pro 200 2-Person Tents to your basket" — to a basket that was
+   * empty, from a turn where no basket tool had run at all. Instructions alone
+   * did not prevent it and cannot be trusted to; a model with a persona that
+   * says it can use a basket will narrate using one.
+   *
+   * So the claim is checked against what actually happened. If it says
+   * something went in and nothing did, the claim does not reach the customer.
+   * Overwriting a model's words is heavy-handed and it is the right trade here:
+   * the words are false, and the person reading them is about to rely on them.
+   */
+  if (!basketChanged && basketAction !== "view" && claimsAnAdd(display)) {
+    console.error(
+      "[jimmy] FALSE BASKET CLAIM suppressed — no tool ran this turn. said:",
+      display.slice(0, 200)
+    );
+    const owner = { customerId: input.customerId ?? null, guestKey: input.guestKey ?? null };
+    let view = null;
+    try {
+      view = await basketView(owner);
+    } catch {
+      view = null;
+    }
+
+    const options =
+      carried.length > 1
+        ? "\n\n" +
+          carried
+            .slice(0, 8)
+            .map((h, i) => `${i + 1}. ${h.name}${h.price !== null ? ` — ${eur(h.price)}` : ""}`)
+            .join("\n") +
+          "\n\nTell me which one and how many, and I'll put it in properly."
+        : carried.length === 1
+        ? ` Say the word and I'll add the ${carried[0].name} for you.`
+        : " Tell me which product you mean and I'll add it.";
+
+    const state = view
+      ? view.count
+        ? `\n\nYour basket currently holds ${view.count} item${view.count === 1 ? "" : "s"}, ${eur(
+            view.totals.grandTotal
+          )} in total.`
+        : "\n\nYour basket is empty at the moment."
+      : "";
+
+    display =
+      "Hold on — I got ahead of myself. Nothing has actually gone into your basket, and I would " +
+      "rather tell you that now than let you find out at checkout." +
+      options +
+      state;
   }
 
   const sources: ChunkSource[] = chunks.map((c) => ({

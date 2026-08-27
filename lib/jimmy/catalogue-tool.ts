@@ -28,6 +28,7 @@
 // so Jimmy can tell stock from research and say which.
 
 import { supabaseAdmin } from "../supabase";
+import { parseImages } from "../catalogue-data";
 
 /* Local copy of service.ts's normaliser rather than an import: service.ts
    imports this file, and a two-way import is the kind of cycle that survives
@@ -46,7 +47,7 @@ const FIELDS =
   "id,slug,sc_product_name,product_name,brand,category_id,subcategory,selling_price," +
   "currency,product_status,research_stage,hero_product,super_hero,ce_certified," +
   "dangerous_goods,eu_sourcing,description,people_capacity,weight_grams,season_rating," +
-  "packed_size,attributes_source";
+  "packed_size,attributes_source,image_urls";
 
 export type CatalogueHit = {
   /** the product row's own id — carried so an offer made this turn can be
@@ -67,6 +68,9 @@ export type CatalogueHit = {
   weightGrams: number | null;
   season: string | null;
   packedSize: string | null;
+  /** first product photograph, so the chat can show a real card rather than a
+      line of text the customer has to retype to act on */
+  image: string | null;
   /** true when this row was offered as the nearest thing rather than a match */
   nearest?: boolean;
   slug: string | null;
@@ -152,8 +156,13 @@ const PET_NOUN = /(?:^|\s)(?:(\d{1,2}|one|two|three|a|an)\s+)?(dogs|dog|cats|cat
 export function readHousehold(text: string): Household | null {
   const t = " " + text.toLowerCase().replace(/[^a-z0-9\s+]/g, " ").replace(/\s+/g, " ") + " ";
 
-  // "family of four" / "household of 5" states it outright — trust it and stop.
-  const explicit = t.match(/\b(?:family|household|group|party)\s+of\s+(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\b/);
+  // "family of four" / "household of 5" / "there are 2 of us" state it outright.
+  // The second form was missed in live testing: "there is 2 of us" scored one
+  // person, because "us" only tripped the speaker check. It is one of the most
+  // natural ways anyone says this.
+  const explicit =
+    t.match(/\b(?:family|household|group|party)\s+of\s+(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\b/) ||
+    t.match(/\b(?:there (?:is|are|s)\s+)?(?:just\s+)?(?:the\s+)?(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s+of\s+us\b/);
   let people = 0;
   const parts: string[] = [];
 
@@ -307,6 +316,7 @@ function toHit(p: any, cats: Record<number, string>): CatalogueHit {
     weightGrams: p.weight_grams ?? null,
     season: p.season_rating || null,
     packedSize: p.packed_size || null,
+    image: parseImages(p.image_urls)[0] ?? null,
     slug: p.slug || null,
     description: p.description ? String(p.description).slice(0, 260) : null,
   };
@@ -554,6 +564,9 @@ export function formatCatalogueBlock(result: CatalogueResult, carried: Catalogue
   out +=
     `\nHOW TO USE THIS:\n` +
     `- Prices and status are real. Quote them. Never invent a product, a price or a stock position.\n` +
+    `- Everything listed here is shown to the customer as a CARD under your reply — picture, price, ` +
+    `Add button. So write about them, do not itemise them as a numbered menu, and never ask the ` +
+    `customer to reply with a number.\n` +
     `- A row that is not "approved" is something we are still working through — say so rather than ` +
     `presenting it as ready to buy.\n` +
     `- YOU ARE STEALTHCRAFTER. Never tell a customer to "check with our store", "contact the shop", ` +
