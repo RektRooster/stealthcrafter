@@ -85,10 +85,29 @@ type CxMsg = {
   role: "user" | "jimmy" | "system";
   text: string;
   sources?: { id: string | number; pack: string; section: string | null }[];
+  /** product rows this answer was built from — separate from knowledge sources */
+  catalogue?: { name: string }[];
   safetyTriggered?: boolean;
   pending?: boolean;
   scripted?: boolean;
 };
+
+/* WHERE THE ANSWER ACTUALLY CAME FROM.
+   The old badge read "Answered from approved knowledge · 6 sources" on an
+   answer built entirely from the catalogue — it counted knowledge chunks that
+   were retrieved alongside and contributed nothing. Attribution that names the
+   wrong source is worse than none: it is the one line on screen telling the
+   reader how much to trust the answer. */
+function attribution(m: CxMsg): string {
+  const products = (m.catalogue || []).length;
+  const chunks = (m.sources || []).length;
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  if (products && chunks)
+    return `From our catalogue (${plural(products, "product", "products")}) and our knowledge base (${plural(chunks, "source", "sources")})`;
+  if (products) return `From our catalogue · ${plural(products, "product", "products")}`;
+  if (chunks) return `From our knowledge base · ${plural(chunks, "source", "sources")}`;
+  return "From general knowledge — not from our own written guidance";
+}
 
 function greetingMsg(n: number): CxMsg {
   return { key: `greet-${n}`, role: "jimmy", text: GREETING, scripted: true };
@@ -379,6 +398,7 @@ export default function JimmyPreview({ data }: { data: JimmyPreviewData }) {
                 role: a.role === "system" ? ("system" as const) : ("jimmy" as const),
                 text: a.text || "",
                 sources: a.sources || [],
+                catalogue: a.catalogue || [],
                 safetyTriggered: Boolean(a.safetyTriggered),
               }
             : m
@@ -548,11 +568,8 @@ export default function JimmyPreview({ data }: { data: JimmyPreviewData }) {
               <div key={m.key} className={`cc-jcx-bubble ${m.role}`}>
                 <span className="who">{m.role === "user" ? "You" : m.role === "jimmy" ? "Jimmy" : "Note"}</span>
                 <div className="txt">{m.pending ? "Jimmy is thinking…" : m.text}</div>
-                {m.role === "jimmy" && !m.pending && !m.scripted && (m.sources || []).length > 0 ? (
-                  <div className="src">
-                    Answered from approved knowledge · {(m.sources || []).length} source
-                    {(m.sources || []).length === 1 ? "" : "s"}
-                  </div>
+                {m.role === "jimmy" && !m.pending && !m.scripted ? (
+                  <div className="src">{attribution(m)}</div>
                 ) : null}
               </div>
             ))}

@@ -366,15 +366,23 @@ function TestConsole({ data }: { data: JimmyConsoleData }) {
               <span className="knob" />
             </button>
           </div>
-          <div className="cc-jimmy-toggle" title="Wired to SC 01 next">
-            <span className="lab">Include product data (wired to SC 01 next)</span>
-            <button type="button" className="sw" disabled aria-label="Include product data — coming soon">
+          <div
+            className="cc-jimmy-toggle locked"
+            title="Always on: shop questions are answered from the products table, never from the knowledge base"
+          >
+            <span className="lab">Product data — ALWAYS ON</span>
+            <button
+              type="button"
+              className="sw on"
+              disabled
+              aria-label="Product data — always on, not switchable"
+            >
               <span className="knob" />
             </button>
           </div>
           <div
             className="cc-jimmy-toggle locked"
-            title="Locked by grounding rule — customer Jimmy answers only from approved knowledge"
+            title="No web search on any surface, in any configuration. Separate from JIMMY_SIGNED_ONLY, which governs knowledge only."
           >
             <span className="lab">
               <span className="cc-jimmy-lockico">
@@ -1006,6 +1014,51 @@ function Analytics({ data }: { data: JimmyConsoleData }) {
         </div>
       </div>
 
+      {/* RANGE GAPS — the most commercially useful thing on this page.
+          Every row is a real customer asking for something we do not sell. */}
+      <div className="cc-detailgrid" style={{ marginTop: 0 }}>
+        <div className="cc-panel cc-span12">
+          <div className="cc-panel-h">
+            <CcIcon name="products" />
+            Range Gaps — what customers asked for and we could not supply
+            <span className="right">{data.rangeGaps.length} LOGGED</span>
+          </div>
+          {data.rangeGaps.length === 0 ? (
+            <div className="cc-notestrip">
+              NO GAPS LOGGED YET. A row appears here whenever Jimmy meets a request the catalogue
+              cannot meet. This is product research for SC 01, not an error log.
+            </div>
+          ) : (
+            <div className="cc-tablewrap">
+              <table className="cc-table">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>They asked</th>
+                    <th>What was missing</th>
+                    <th>Area</th>
+                    <th>Needed</th>
+                    <th>Most we hold</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rangeGaps.map((g) => (
+                    <tr key={g.id}>
+                      <td className="mono sm">{new Date(g.created_at).toLocaleDateString("en-GB")}</td>
+                      <td>{g.asked}</td>
+                      <td className="sm">{g.missing || "—"}</td>
+                      <td className="sm">{g.category || "—"}</td>
+                      <td className="mono">{g.requested_capacity ?? "—"}</td>
+                      <td className="mono">{g.best_available_capacity ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="cc-detailgrid" style={{ marginTop: 0 }}>
         <div className="cc-panel cc-span6">
           <div className="cc-panel-h">
@@ -1225,13 +1278,15 @@ function SettingsTab({ data, onChanged }: { data: JimmyConsoleData; onChanged: (
             />
           </label>
         </div>
-        <div className="cc-jimmy-lockrow" title="Locked by grounding rule — customer Jimmy answers only from approved knowledge">
+        <div className="cc-jimmy-lockrow" title="No web search on any surface, in any configuration">
           <span className="cc-jimmy-lockico">
             <LockIcon size={14} />
           </span>
           <span>
-            <strong>Customer real-time web search — LOCKED OFF.</strong> No control exists here: the grounding rule
-            hard-codes customer Jimmy to SIGNED knowledge only. Any patch touching it is rejected by the API.
+            <strong>Customer real-time web search — LOCKED OFF.</strong> No control exists here and none is
+            planned: Jimmy never reaches the open web, on any surface, in any configuration. Any patch touching it
+            is rejected by the API. Separate from signed-only retrieval, which is now the <code>JIMMY_SIGNED_ONLY</code>
+            environment switch (default OFF while the site is gated) and governs the knowledge base, not the web.
           </span>
         </div>
         <div className="cc-jimmy-signrow" style={{ marginTop: 14 }}>

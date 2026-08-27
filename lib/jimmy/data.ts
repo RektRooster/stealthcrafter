@@ -91,6 +91,19 @@ export type JimmyAnalytics = {
   spendTodayCents: number;
 };
 
+/* A request Jimmy could not meet from the range. Product research, not an
+   error log — SC 01 reads this to decide what to buy. */
+export type JimmyRangeGap = {
+  id: string;
+  asked: string;
+  missing: string | null;
+  category: string | null;
+  requested_capacity: number | null;
+  best_available_capacity: number | null;
+  surface: string | null;
+  created_at: string;
+};
+
 export type JimmyConsoleData = {
   configured: boolean;
   settings: JimmySettings;
@@ -102,6 +115,7 @@ export type JimmyConsoleData = {
   scenarios: JimmyScenario[];
   conversations: JimmyConversationRow[];
   analytics: JimmyAnalytics;
+  rangeGaps: JimmyRangeGap[];
   keys: { openai: boolean; anthropic: boolean };
 };
 
@@ -136,6 +150,7 @@ export async function getJimmyConsoleData(): Promise<JimmyConsoleData> {
       scenarios: [],
       conversations: [],
       analytics: { ...EMPTY_ANALYTICS },
+      rangeGaps: [],
       keys,
     };
   }
@@ -173,6 +188,13 @@ export async function getJimmyConsoleData(): Promise<JimmyConsoleData> {
         .order("started_at", { ascending: false })
         .limit(50),
     ]);
+
+  const { data: gapRows } = await sb
+    .from("jimmy_range_gaps")
+    .select("id,asked,missing,category,requested_capacity,best_available_capacity,surface,created_at")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  const rangeGaps = (gapRows || []) as JimmyRangeGap[];
 
   const convRows = convRes.data || [];
   const convIds = convRows.map((c: any) => c.id);
@@ -267,6 +289,7 @@ export async function getJimmyConsoleData(): Promise<JimmyConsoleData> {
     scenarios: (scenariosRes.data || []) as JimmyScenario[],
     conversations,
     analytics,
+    rangeGaps,
     keys,
   };
 }

@@ -8,7 +8,8 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "../supabase";
 import { ChatMsg, NoProviderKeyError, estimateCostCents, routeChat } from "./providers";
 import {
-  catalogueSize,
+  CatalogueHit,
+  CatalogueResult,
   formatCatalogueBlock,
   looksLikeShopQuestion,
   searchCatalogue,
@@ -70,6 +71,9 @@ export type JimmyAnswer = {
   /** true when this is a stored system notice (paused / rate limit / cap / no key) */
   notice: boolean;
   role: "jimmy" | "system";
+  /** product rows shown in this turn — carried into the next one, and the
+      reason the answer badge can say where the answer really came from */
+  catalogue: CatalogueHit[];
 };
 
 export type JimmyChatInput = {
@@ -227,6 +231,7 @@ function answerFromStored(m: any): JimmyAnswer {
     triggerId: m.trigger_id ?? null,
     notice: m.role === "system",
     role: m.role === "system" ? "system" : "jimmy",
+    catalogue: Array.isArray(m.catalogue) ? m.catalogue : [],
   };
 }
 
@@ -417,21 +422,79 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     }
   }
 
+  /* CARRIED CATALOGUE — the fix for the worst turn in the transcript.
+     Jimmy listed eight tents, was asked which suited a family of three plus a
+     dog, ran a FRESH search for "family tent", found nothing, and answered from
+     emptiness — denying products he had named himself seconds earlier. Tool
+     results have to survive the turn, so the rows shown are stored on the
+     assistant message and handed back here. */
+  let carried: CatalogueHit[] = [];
+  try {
+    const { data: lastShown } = await sb
+      .from("jimmy_messages")
+      .select("catalogue,created_at")
+      .eq("conversation_id", input.conversationId)
+      .eq("role", "jimmy")
+      .not("catalogue", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const rows = (lastShown as any)?.catalogue;
+    if (Array.isArray(rows)) carried = rows as CatalogueHit[];
+  } catch {
+    carried = [];
+  }
+
   /* CATALOGUE — a tool in effect, not in protocol (the provider layer has no
      function calling yet). Shop questions are answered from the products table
      directly and never routed through the knowledge base: doctrine cannot know
-     what we stock, and asking it to try is what made Jimmy refuse to say
-     whether we sell tents. Best-effort — a catalogue failure must not take the
-     answer down with it. */
+     what we stock. Best-effort — a catalogue failure must not take the answer
+     down with it. */
   let catalogueBlock = "";
-  if (looksLikeShopQuestion(input.message)) {
+  let shopResult: CatalogueResult | null = null;
+  if (looksLikeShopQuestion(input.message, carried.length > 0)) {
     try {
-      const [hits, size] = await Promise.all([searchCatalogue(input.message), catalogueSize()]);
-      if (size.products > 0) catalogueBlock = formatCatalogueBlock(hits, size);
+      const priorText = (priorUsers || []).map((m: any) => m.content || "").join(" \n ");
+      const r = await searchCatalogue(input.message, { carried, priorText });
+      if (r.size.products > 0) {
+        shopResult = r;
+        catalogueBlock = formatCatalogueBlock(r, carried);
+      }
     } catch {
       catalogueBlock = "";
     }
   }
+
+  /* PERSONA OVERRIDE.
+   *
+   * This is not belt-and-braces. The stored system prompt (SC 03's
+   * jimmy-v0.1-en) says in as many words: answer only from approved knowledge,
+   * never fill the gap from general knowledge, hand to a human whenever unsure,
+   * and "never set price or catalogue — that's the shop's job". Read literally,
+   * "check with our store directly" is COMPLIANCE, not hallucination. Jimmy did
+   * what he was told.
+   *
+   * SC 03 owns that prompt and should fold these rules into a v0.2. Until then
+   * the runtime states plainly which parts it is overriding, rather than
+   * appending a contradiction and hoping the model picks the right master.
+   */
+  const personaOverride =
+    "\n\n=== RUNTIME OVERRIDE — these rules beat anything above that conflicts with them ===\n" +
+    "1. YOU ARE STEALTHCRAFTER. Not a helper who works alongside the shop — the shop itself. " +
+    "Where the brief above says the catalogue is \"the shop's job\", that job is YOURS. " +
+    "NEVER tell a customer to \"check with our store\", \"contact the shop\", \"speak to the team about " +
+    "stock\", \"try a local retailer\", \"explore local options\", or look anywhere else. There is no one " +
+    "else to ask. Sending a ready-to-buy customer away is the single worst thing you can do.\n" +
+    "2. NEVER DENY WHAT YOU HAVE ALREADY SHOWN. If products appear under ALREADY SHOWN, they are ours " +
+    "and the customer has seen them. A follow-up about \"the best one\" refers to that list. Reason over " +
+    "it before you go looking for anything else, and never claim we have nothing while it is on screen.\n" +
+    "3. NEVER DEAD-END. When we cannot meet a request: (a) say plainly what we do not have; " +
+    "(b) recommend the nearest thing we DO have and be honest about how it falls short; (c) tell them " +
+    "what to look for so the advice is worth having anyway; (d) say you are flagging it to the buying " +
+    "team — we log it, and it is true. Being honest about a real range is worth more to them than a " +
+    "general AI's guesswork.\n" +
+    "4. Handing off to a person is for safety and for things only a human can settle — never a way to " +
+    "avoid answering a question about our own products.\n";
 
   const instruction = strict
     ? "Answer ONLY from the grounded chunks above. If they don't cover it, say you don't want to guess and offer a person. "
@@ -464,7 +527,8 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     householdBlock +
     "\n\n=== INSTRUCTION ===\n" +
     instruction +
-    "End with the exact tier tag <tier>GREEN|AMBER|RED</tier> reflecting the most cautious tier of content you relied on.";
+    "End with the exact tier tag <tier>GREEN|AMBER|RED</tier> reflecting the most cautious tier of content you relied on." +
+    personaOverride;
 
   const messages: ChatMsg[] = [{ role: "system", content: basePrompt + groundingBlock }];
 
@@ -521,7 +585,33 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     tokens_out: routed.tokensOut,
     cost_cents: costCents,
     safety_triggered: false,
+    // What was on screen this turn. Read back on the NEXT turn so a follow-up
+    // reasons over the list instead of searching again and finding nothing.
+    // Carried forward unchanged when this turn showed nothing new, so the
+    // thread survives an intervening non-shop question.
+    catalogue: shopResult ? shopResult.hits : carried.length ? carried : null,
   });
+
+  /* THE GAP LOG. A customer asking for something we do not sell is free product
+     research, not an error. Written deterministically — the model is not asked
+     to remember to log anything — and best-effort, because failing to record a
+     gap must never cost the customer their answer. SC 01 reads this table. */
+  if (shopResult?.gap) {
+    try {
+      await sb.from("jimmy_range_gaps").insert({
+        conversation_id: input.conversationId,
+        message_id: stored?.id ?? null,
+        asked: shopResult.gap.asked,
+        missing: shopResult.gap.missing,
+        category: shopResult.gap.category,
+        requested_capacity: shopResult.gap.requestedCapacity,
+        best_available_capacity: shopResult.gap.bestAvailableCapacity,
+        surface: input.surface,
+      });
+    } catch {
+      /* logging a gap is never worth failing a reply over */
+    }
+  }
 
   return answerFromStored(
     stored || {
@@ -535,6 +625,7 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
       tokens_in: routed.tokensIn,
       tokens_out: routed.tokensOut,
       cost_cents: costCents,
+      catalogue: shopResult ? shopResult.hits : [],
     }
   );
 }
