@@ -86,10 +86,19 @@ async function load(): Promise<{ rows: any[]; cats: Record<number, string> }> {
   const cats: Record<number, string> = {};
   for (const c of catRows || []) cats[(c as any).id] = (c as any).name;
 
-  // Paged: the table is over a thousand rows and PostgREST caps a page at 1,000.
+  // Paged: 1,173 products and PostgREST caps a page at 1,000.
+  //
+  // REJECTED is the one status excluded. "Full set, not just approved_products"
+  // means Jimmy should see what we are still working through — it does not mean
+  // he should offer a customer something the business has already turned down.
+  // draft / researching / approved all travel, each labelled with its own status.
   const rows: any[] = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await sb.from("products").select(FIELDS).range(from, from + 999);
+    const { data, error } = await sb
+      .from("products")
+      .select(FIELDS)
+      .neq("product_status", "rejected")
+      .range(from, from + 999);
     if (error) break;
     const batch = data || [];
     rows.push(...batch);
@@ -111,9 +120,26 @@ function nameOf(p: any): string {
 const STOP = new Set([
   "the","and","you","for","with","have","has","are","any","can","что","what","how",
   "much","does","did","your","our","this","that","from","get","got","need","want",
-  "sell","sells","stock","buy","price","cost","product","products","item","items",
+  "sell","sells","stock","stocks","buy","buys","price","prices","cost","costs",
+  "product","products","item","items","thing","things","something","anything",
   "emergency","survival","kit","kits","best","good","recommend","looking","about",
 ]);
+
+/* Crude singular stem, and the difference between this tool working and not.
+   Matching is substring-based, and "do you sell tents" is the literal question
+   this whole change exists to answer — but the catalogue has twelve products
+   with "tent" in the name and ZERO with "tents", so an unstemmed query scores
+   nothing and Jimmy says we do not sell tents. Stemming only the QUERY side
+   covers both directions, since the stem is a substring of the plural too.
+   Deliberately conservative: never strip from ss/us/is endings ("gas", "lens"),
+   never below four characters. */
+function stem(w: string): string {
+  if (w.length > 4 && w.endsWith("ies")) return w.slice(0, -3) + "y";
+  if (w.length > 4 && w.endsWith("sses")) return w.slice(0, -2);
+  if (w.length > 4 && w.endsWith("es") && !w.endsWith("ses")) return w.slice(0, -1);
+  if (w.length >= 4 && w.endsWith("s") && !/(ss|us|is)$/.test(w)) return w.slice(0, -1);
+  return w;
+}
 
 export async function searchCatalogue(message: string, limit = 8): Promise<CatalogueHit[]> {
   const { rows, cats } = await load();
@@ -124,6 +150,8 @@ export async function searchCatalogue(message: string, limit = 8): Promise<Catal
       normaliseText(message)
         .split(" ")
         .filter((w) => w.length >= 3 && !STOP.has(w))
+        .map(stem)
+        .filter((w) => w.length >= 3)
     )
   );
   if (!tokens.length) return [];
@@ -148,7 +176,7 @@ export async function searchCatalogue(message: string, limit = 8): Promise<Catal
       if (score > 0) {
         if (p.super_hero) score += 2;
         else if (p.hero_product) score += 1;
-        if (p.product_status === "listed" || p.product_status === "approved") score += 1;
+        if (p.product_status === "approved") score += 1;
       }
       return { p, score };
     })
@@ -216,7 +244,7 @@ export function formatCatalogueBlock(hits: CatalogueHit[], size: { products: num
     head +
     `Products matching this question:\n${lines.join("\n")}\n` +
     `Answer shop questions from THESE ROWS ONLY. Prices and status are real. ` +
-    `If a row is not "listed" or "approved", it is something we are still working through — ` +
+    `If a row is not "approved", it is something we are still working through — ` +
     `say that rather than presenting it as available to buy.\n`
   );
 }
