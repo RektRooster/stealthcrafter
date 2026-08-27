@@ -7,8 +7,36 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "../supabase";
 import { ChatMsg, NoProviderKeyError, estimateCostCents, routeChat } from "./providers";
+import {
+  catalogueSize,
+  formatCatalogueBlock,
+  looksLikeShopQuestion,
+  searchCatalogue,
+} from "./catalogue-tool";
 
 export type Tier = "GREEN" | "AMBER" | "RED";
+
+/* SIGNED-ONLY: a switch, not a hard-code.
+ *
+ * The launch position is that Jimmy speaks only from knowledge a human has
+ * signed. That position is correct for a public site and wrong for a
+ * password-gated demo with zero signed chunks — it made him decline every
+ * question he was asked, including "do you sell tents".
+ *
+ * So it is now an env flag, DEFAULT OFF while the site is gated. Flipping it on
+ * is a one-line config change in Vercel and belongs on the launch checklist:
+ *
+ *     JIMMY_SIGNED_ONLY=true
+ *
+ * Nothing else about the safety model moves. Tiering, signing, the knowledge
+ * base and the approval flow all stay exactly as built; with the flag off they
+ * are simply dormant. The emergency detector runs before this and is not
+ * affected by it in either position.
+ */
+export function signedOnlyMode(): boolean {
+  const raw = String(process.env.JIMMY_SIGNED_ONLY ?? "").trim().toLowerCase();
+  return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
+}
 
 export type JimmySettings = {
   id: number;
@@ -334,9 +362,12 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     return storeNotice(sb, input.conversationId, COST_CAP_NOTICE, promptVersion);
   }
 
-  // 5) RETRIEVAL — grounded-only, inline v1. Console may include DRAFT;
-  //    customer/preview is HARD-CODED to SIGNED only. No web search of any kind.
-  const includeDraft = input.surface === "console" && Boolean(input.includeDraft);
+  // 5) RETRIEVAL. In signed-only mode the old rule stands: console may include
+  //    DRAFT, customer/preview sees SIGNED only. With the flag off, every
+  //    surface sees DRAFT+SIGNED — the knowledge is context to lean on rather
+  //    than a fence to stay inside. No web search of any kind, either way.
+  const strict = signedOnlyMode();
+  const includeDraft = strict ? input.surface === "console" && Boolean(input.includeDraft) : true;
   let kq = sb
     .from("jimmy_knowledge")
     .select("id,pack,section,content,tier,status,keywords");
@@ -361,9 +392,13 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     .select("version,content,status")
     .eq("version", promptVersion)
     .maybeSingle();
-  const basePrompt =
-    promptRow?.content ||
-    `You are Jimmy, StealthCrafter's preparedness companion. (System prompt "${promptVersion}" is not loaded yet — knowledge seeding in progress. Be brief, honest, and answer only from the grounded chunks below.)`;
+  /* The fallback prompt used to end "answer only from the grounded chunks
+     below", which quietly re-imposed the very rule the flag turns off. It now
+     follows the flag like everything else. */
+  const fallbackPrompt = strict
+    ? `You are Jimmy, StealthCrafter's preparedness companion. (System prompt "${promptVersion}" is not loaded yet — knowledge seeding in progress. Be brief, honest, and answer only from the grounded chunks below.)`
+    : `You are Jimmy, StealthCrafter's preparedness companion — practical, calm and straight-talking, helping European households get ready for the things that actually happen: power cuts, storms, floods, water outages, heat. (System prompt "${promptVersion}" is not loaded yet, so this is your working brief.) Be brief and useful. Never invent details about StealthCrafter's products, prices or stock.`;
+  const basePrompt = promptRow?.content || fallbackPrompt;
 
   // household context from the test profile
   const profileId = input.profileId ?? null;
@@ -382,16 +417,53 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     }
   }
 
+  /* CATALOGUE — a tool in effect, not in protocol (the provider layer has no
+     function calling yet). Shop questions are answered from the products table
+     directly and never routed through the knowledge base: doctrine cannot know
+     what we stock, and asking it to try is what made Jimmy refuse to say
+     whether we sell tents. Best-effort — a catalogue failure must not take the
+     answer down with it. */
+  let catalogueBlock = "";
+  if (looksLikeShopQuestion(input.message)) {
+    try {
+      const [hits, size] = await Promise.all([searchCatalogue(input.message), catalogueSize()]);
+      if (size.products > 0) catalogueBlock = formatCatalogueBlock(hits, size);
+    } catch {
+      catalogueBlock = "";
+    }
+  }
+
+  const instruction = strict
+    ? "Answer ONLY from the grounded chunks above. If they don't cover it, say you don't want to guess and offer a person. "
+    : /* Flag off: he is a knowledgeable person who works here, not a lookup
+         table. The knowledge is a head start, not a boundary. The catalogue is
+         the one hard boundary — being wrong about doctrine is a bad answer,
+         being wrong about what we sell is a lie about our own shop. */
+      "Use the knowledge above where it helps, but you are NOT limited to it. Answer the question properly and " +
+      "practically from what you know, in plain language, as a well-read person who works here would. " +
+      "Do not refuse because something is missing from the chunks above, and do not say you have no verified " +
+      "answer unless you genuinely do not know. No hedging preamble about your sources — just answer. " +
+      "THE ONE EXCEPTION is our shop: anything about what we sell, stock, or charge must come from the CATALOGUE " +
+      "block. If there is no catalogue block, or nothing in it matches, say we may not carry it rather than " +
+      "inventing a product, a price or a stock position. " +
+      "If something is genuinely dangerous to get wrong — medical, structural, electrical, gas — say so plainly " +
+      "and point at professional help, as you would anyway. ";
+
   const groundingBlock =
-    "\n\n=== GROUNDING — APPROVED KNOWLEDGE CHUNKS ===\n" +
+    "\n\n=== GROUNDING — " +
+    (strict ? "APPROVED KNOWLEDGE CHUNKS" : "OUR OWN KNOWLEDGE (may include unsigned drafts)") +
+    " ===\n" +
     (chunks.length
       ? chunks
           .map((c) => `[${c.pack}/${c.section || "general"} — ${c.tier || "AMBER"}]\n${c.content || ""}`)
           .join("\n\n")
-      : "(no matching approved knowledge found for this question)") +
+      : strict
+      ? "(no matching approved knowledge found for this question)"
+      : "(nothing in our own knowledge base matches this question — answer from what you know)") +
+    catalogueBlock +
     householdBlock +
     "\n\n=== INSTRUCTION ===\n" +
-    "Answer ONLY from the grounded chunks above. If they don't cover it, say you don't want to guess and offer a person. " +
+    instruction +
     "End with the exact tier tag <tier>GREEN|AMBER|RED</tier> reflecting the most cautious tier of content you relied on.";
 
   const messages: ChatMsg[] = [{ role: "system", content: basePrompt + groundingBlock }];
