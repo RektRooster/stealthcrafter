@@ -49,6 +49,9 @@ const FIELDS =
   "packed_size,attributes_source";
 
 export type CatalogueHit = {
+  /** the product row's own id — carried so an offer made this turn can be
+      acted on next turn without re-matching a name */
+  id: string;
   name: string;
   brand: string | null;
   category: string;
@@ -288,6 +291,7 @@ function tokensOf(message: string): string[] {
 
 function toHit(p: any, cats: Record<number, string>): CatalogueHit {
   return {
+    id: p.id,
     name: nameOf(p),
     brand: p.brand || null,
     category: cats[p.category_id] || "Uncategorised",

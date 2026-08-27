@@ -16,6 +16,20 @@ import {
 } from "./catalogue-tool";
 import { capabilityBlock } from "./capabilities";
 import { detectBasketIntent, runBasketTool } from "./basket-tool";
+import {
+  acceptanceBlock,
+  acceptsOffer,
+  declineBlock,
+  declinesOffer,
+  decideOffer,
+  invitationBlock,
+  looksLikeBuyingIntent,
+  offerBlock,
+  offerInvitation,
+  resolveNomination,
+  type BasketOffer,
+} from "./offer";
+import { basketView } from "../commerce/basket";
 
 export type Tier = "GREEN" | "AMBER" | "RED";
 
@@ -267,6 +281,21 @@ async function storeNotice(
   return answerFromStored(stored || { role: "system", content });
 }
 
+/** Is this product already in their basket? Guards the acceptance path: a
+ *  second "yes" long after an offer was taken up must not quietly add a second
+ *  unit of the same thing. */
+async function alreadyHolds(
+  owner: { customerId?: string | null; guestKey?: string | null },
+  productId: string
+): Promise<boolean> {
+  try {
+    const view = await basketView(owner);
+    return view.lines.some((l) => l.productId === productId);
+  } catch {
+    return false;
+  }
+}
+
 /* ---------- the pipeline ---------- */
 
 export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> {
@@ -453,6 +482,35 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     carried = [];
   }
 
+  /* WHAT WE HAVE ALREADY OFFERED.
+     Two things are needed from the record: the offer standing right now, so a
+     bare "yes" knows what it is agreeing to; and every product offered anywhere
+     in this conversation, so the same one is never put forward twice. An
+     assistant that re-offers is a nag, and a nag costs more trust than the sale
+     was worth. */
+  let standingOffer: BasketOffer | null = null;
+  const alreadyOffered: string[] = [];
+  try {
+    const { data: offerRows } = await sb
+      .from("jimmy_messages")
+      .select("offer,created_at")
+      .eq("conversation_id", input.conversationId)
+      .eq("role", "jimmy")
+      .not("offer", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    const rows = (offerRows as any[]) || [];
+    for (const r of rows) {
+      const o = r.offer as BasketOffer;
+      if (o?.productId) alreadyOffered.push(o.productId);
+    }
+    // The most recent one is the only one a "yes" could plausibly mean.
+    const latest = rows[0]?.offer as BasketOffer | undefined;
+    if (latest?.productId) standingOffer = latest;
+  } catch {
+    standingOffer = null;
+  }
+
   /* CATALOGUE — a tool in effect, not in protocol (the provider layer has no
      function calling yet). Shop questions are answered from the products table
      directly and never routed through the knowledge base: doctrine cannot know
@@ -460,7 +518,15 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
      down with it. */
   let catalogueBlock = "";
   let shopResult: CatalogueResult | null = null;
-  if (looksLikeShopQuestion(input.message, carried.length > 0)) {
+  /* Buying intent counts as a shop question when there is something on the
+     table. "that sounds right" names no product and matches no keyword, but in
+     the light of the last turn it is the most commercial sentence in the
+     conversation. */
+  const hasCarried = carried.length > 0;
+  if (
+    looksLikeShopQuestion(input.message, hasCarried) ||
+    (hasCarried && looksLikeBuyingIntent(input.message))
+  ) {
     try {
       const priorText = (priorUsers || []).map((m: any) => m.content || "").join(" \n ");
       const r = await searchCatalogue(input.message, { carried, priorText });
@@ -478,20 +544,78 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
      fatal: a basket that will not open must produce a sentence, not a 500. */
   let basketBlock = "";
   let basketChanged = false;
+  let answerBlock = "";
   try {
+    const owner = { customerId: input.customerId ?? null, guestKey: input.guestKey ?? null };
     const intent = detectBasketIntent(input.message, carried);
+
     if (intent.action) {
-      const owner = { customerId: input.customerId ?? null, guestKey: input.guestKey ?? null };
       const done = await runBasketTool(owner, intent, input.message, carried);
       if (done) {
         basketBlock = done.block;
         basketChanged = done.changed;
       }
+    } else if (standingOffer && acceptsOffer(input.message) && !(await alreadyHolds(owner, standingOffer.productId))) {
+      // "yes" is only an instruction because an offer is standing. Resolved by
+      // product id rather than by re-matching the name, so the thing that goes
+      // in the basket is exactly the thing that was offered.
+      const done = await runBasketTool(
+        owner,
+        { action: "add", ref: standingOffer.productId, qty: 1 },
+        input.message,
+        carried
+      );
+      if (done) {
+        basketBlock = done.block;
+        basketChanged = done.changed;
+      }
+      answerBlock = acceptanceBlock(standingOffer.name);
+    } else if (standingOffer && declinesOffer(input.message)) {
+      answerBlock = declineBlock(standingOffer.name);
     }
   } catch {
     basketBlock =
       "\n\n=== BASKET TOOL ===\nThe basket could not be reached just now and NOTHING WAS CHANGED. " +
       "Say so plainly and suggest they try again in a moment — do not claim anything was added.\n";
+  }
+
+  /* SHOULD HE OFFER? Every reason not to lives in decideOffer, and it says no
+     far more often than yes. Only reached when nothing has already been added
+     and the customer is weighing up exactly one thing. */
+  let newOffer: BasketOffer | null = null;
+  let offerBlockText = "";
+  /* Set when the model has been INVITED to nominate one of several. Kept so the
+     nomination can be resolved against the list it was actually shown, rather
+     than against anything it might name. */
+  let nominable: CatalogueHit[] | null = null;
+  try {
+    if (!basketChanged && !answerBlock && looksLikeBuyingIntent(input.message)) {
+      // Only now worth the query: what is already in the basket must not be
+      // offered again either.
+      const inBasket = (
+        await basketView({ customerId: input.customerId ?? null, guestKey: input.guestKey ?? null })
+      ).lines.map((l) => l.productId);
+      const ctx = {
+        message: input.message,
+        result: shopResult,
+        carried,
+        alreadyOffered,
+        inBasket,
+        basketActed: basketChanged || Boolean(basketBlock),
+      };
+      newOffer = decideOffer(ctx);
+      if (newOffer) {
+        offerBlockText = offerBlock(newOffer);
+      } else {
+        // Several on the table: let the answer decide which, since we cannot.
+        nominable = offerInvitation(ctx);
+        if (nominable) offerBlockText = invitationBlock(nominable);
+      }
+    }
+  } catch {
+    newOffer = null;
+    nominable = null;
+    offerBlockText = "";
   }
 
   /* THINGS WE HAVE NOT BUILT. An unbuilt feature gets a sentence, never an
@@ -529,7 +653,11 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     "general AI's guesswork.\n" +
     "4. Handing off to a person is for safety and for things only a human can settle — never a way to " +
     "avoid answering a question about our own products.\n" +
-    "5. YOU CAN PUT THINGS IN THEIR BASKET. If they ask you to add, remove or show something, it is " +
+    "5. OFFER, DO NOT WAIT TO BE ASKED. When you have genuinely landed on one product for this " +
+    "household, finish by offering to put it in their basket — once, in a sentence, in your own " +
+    "voice. Never make the same offer twice, never offer a list, and never offer something you do " +
+    "not believe suits them. Honest curation is the product; a sale you had to push is not.\n" +
+    "6. YOU CAN PUT THINGS IN THEIR BASKET. If they ask you to add, remove or show something, it is " +
     "done before you see this — look for a BASKET TOOL block and report what it says. Never say you " +
     "are unable to add something to a basket, and never say you have added something unless that " +
     "block says you did.\n";
@@ -563,6 +691,8 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
       : "(nothing in our own knowledge base matches this question — answer from what you know)") +
     catalogueBlock +
     basketBlock +
+    answerBlock +
+    offerBlockText +
     gapsBlock +
     householdBlock +
     "\n\n=== INSTRUCTION ===\n" +
@@ -601,7 +731,19 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
   // 8) Parse the <tier> tag (strip from display; default AMBER when missing).
   const tierMatch = routed.text.match(/<tier>\s*(GREEN|AMBER|RED)\s*<\/tier>/i);
   const tier: Tier = tierMatch ? (tierMatch[1].toUpperCase() as Tier) : "AMBER";
-  const display = routed.text.replace(/<tier>[\s\S]*?<\/tier>/gi, "").trim();
+  let display = routed.text.replace(/<tier>[\s\S]*?<\/tier>/gi, "").trim();
+
+  /* The <offer> nomination, same mechanism as the tier tag. Stripped from the
+     display either way — a tag the customer can see is a bug — and only turned
+     into a real offer if it names something the model was actually shown. A
+     nomination we cannot resolve is dropped in silence: the worst outcome is a
+     "yes" that finds nothing standing, which is far better than adding a
+     product nobody named. */
+  const offerMatch = display.match(/<offer>([\s\S]{1,160}?)<\/offer>/i);
+  display = display.replace(/<offer>[\s\S]*?<\/offer>/gi, "").trim();
+  if (offerMatch && nominable && !newOffer) {
+    newOffer = resolveNomination(offerMatch[1], nominable);
+  }
 
   const sources: ChunkSource[] = chunks.map((c) => ({
     id: c.id,
@@ -630,6 +772,9 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     // Carried forward unchanged when this turn showed nothing new, so the
     // thread survives an intervening non-shop question.
     catalogue: shopResult ? shopResult.hits : carried.length ? carried : null,
+    // Remembered so a "yes" next turn resolves, and so this product is never
+    // offered a second time in this conversation.
+    offer: newOffer,
   });
 
   /* THE GAP LOG. A customer asking for something we do not sell is free product
