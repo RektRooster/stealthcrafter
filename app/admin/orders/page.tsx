@@ -1,13 +1,16 @@
-import ModuleStub from "../module-stub";
+import { adminOrderList } from "@/lib/commerce/orders";
+import OrdersConsole from "./orders-console";
 
 export const dynamic = "force-dynamic";
 
-export default function OrdersPage() {
+// ORDERS & FULFILMENT — live from the commerce demo.
+// Was an honest placeholder for as long as there was nothing to show. There is
+// now: real orders placed through the storefront, with a real status lifecycle.
+export default async function OrdersPage() {
+  const rows = await adminOrderList();
   return (
-    <ModuleStub
-      title="ORDERS & FULFILMENT"
-      icon="orders"
-      desc="Order pipeline, fulfilment routing to the ES/SK nodes, shipping status and returns. Comes online with checkout: needs the payments provider (SC 05/06 decision, deferred to launch phase) and the customer accounts layer. Until then there are no orders to show — this console will read live order data only, never samples."
-    />
+    <div className="cc-page">
+      <OrdersConsole rows={rows} />
+    </div>
   );
 }

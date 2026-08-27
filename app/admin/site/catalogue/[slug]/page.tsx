@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EVIDENCE_META, fmtEur, getProductBySlug, toEur } from "@/lib/catalogue-data";
+import AddToBasket from "../../_shop/add-to-basket";
 import type { ProductDetail } from "@/lib/catalogue-data";
 
 export const dynamic = "force-dynamic";
@@ -81,20 +82,24 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 </span>
               </div>
               <div className="sf-buyactions">
-                {/* A product that has earned its place shows a live-looking
-                    basket button. It does nothing yet — the basket is SC 06 and
-                    SC 08's ground, not ours — but this is a gated demo whose job
-                    is to show the shop as it will ship, and a permanently greyed
-                    primary action misrepresents that as much as a fake price
-                    would. A product that has NOT earned its place still says so
-                    plainly, and that button really is disabled. */}
-                <button
-                  type="button"
-                  className={`sf-cta sm${p.state === "listed" ? "" : " off"}`}
-                  disabled={p.state !== "listed"}
-                >
-                  {p.state === "listed" ? "Add to basket" : "Not yet available"}
-                </button>
+                {/* The button is real now. The buyable set for the demo is
+                    everything we have not rejected — the Desk's ruling, so the
+                    walkthrough is not gated on the approval backlog. A product
+                    still being researched can go in a basket and says so on
+                    every screen after; a rejected one cannot, and that is the
+                    only case where "not available" is the truth rather than an
+                    artefact of where the work has got to. */}
+                <AddToBasket
+                  productId={p.id}
+                  buyable={p.state !== "rejected"}
+                  reason={
+                    p.state === "rejected"
+                      ? "We looked at this one and decided against it."
+                      : p.price === null
+                      ? "No price on file yet."
+                      : undefined
+                  }
+                />
                 <Link href={askJimmy} className="sf-buyask">
                   Ask Jimmy if this suits my household →
                 </Link>

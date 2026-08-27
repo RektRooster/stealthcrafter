@@ -15,6 +15,7 @@
 // If TTS is unavailable the experience silently falls back to text-only.
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { JimmyProfile } from "@/lib/jimmy/data";
 import {
@@ -245,8 +246,20 @@ function SpeakerIcon({ muted, size = 16 }: { muted: boolean; size?: number }) {
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
-export default function JimmyPreview({ data }: { data: JimmyPreviewData }) {
+export default function JimmyPreview({
+  data,
+  customerProfileId = null,
+}: {
+  data: JimmyPreviewData;
+  /** the signed-in customer's own household, when there is one */
+  customerProfileId?: string | null;
+}) {
+  const router = useRouter();
   const [profileId, setProfileId] = useState<string>(() => {
+    // Their own household wins over any test profile — that is the whole
+    // reason an account exists.
+    if (customerProfileId && data.profiles.some((p) => String(p.id) === String(customerProfileId)))
+      return String(customerProfileId);
     const t = data.profiles.find((p) => p.is_test) || data.profiles[0];
     return t ? String(t.id) : "";
   });
@@ -404,6 +417,8 @@ export default function JimmyPreview({ data }: { data: JimmyPreviewData }) {
             : m
         )
       );
+      // A basket write in this turn means the header pip is now stale.
+      if (a.basketChanged) router.refresh();
       if (a.role !== "system" && a.text) void speak(a.text);
     } catch (e: any) {
       setThread((t) =>
@@ -412,7 +427,13 @@ export default function JimmyPreview({ data }: { data: JimmyPreviewData }) {
             ? {
                 key: m.key,
                 role: "system",
-                text: "Something went wrong on our side — your message is safe, please try again in a moment.",
+                /* Not "something went wrong on our side": that reads as a
+                   broken shop, and most of the time this is the network or an
+                   unbuilt capability rather than a fault. Say what is true and
+                   what they can do. */
+                text:
+                  "I could not reach my end just now — your message is saved, nothing is lost. " +
+                  "Give it a moment and ask me again.",
               }
             : m
         )

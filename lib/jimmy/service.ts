@@ -14,6 +14,8 @@ import {
   looksLikeShopQuestion,
   searchCatalogue,
 } from "./catalogue-tool";
+import { capabilityBlock } from "./capabilities";
+import { detectBasketIntent, runBasketTool } from "./basket-tool";
 
 export type Tier = "GREEN" | "AMBER" | "RED";
 
@@ -74,6 +76,8 @@ export type JimmyAnswer = {
   /** product rows shown in this turn — carried into the next one, and the
       reason the answer badge can say where the answer really came from */
   catalogue: CatalogueHit[];
+  /** true when this turn actually changed the basket, so the UI can refresh */
+  basketChanged: boolean;
 };
 
 export type JimmyChatInput = {
@@ -85,6 +89,9 @@ export type JimmyChatInput = {
   includeDraft?: boolean;
   /** customer/preview surfaces are hard-locked to SIGNED-only retrieval */
   surface: "console" | "preview";
+  /** who is shopping — lets Jimmy actually put things in a basket */
+  customerId?: string | null;
+  guestKey?: string | null;
 };
 
 const PAUSED_NOTICE =
@@ -232,6 +239,7 @@ function answerFromStored(m: any): JimmyAnswer {
     notice: m.role === "system",
     role: m.role === "system" ? "system" : "jimmy",
     catalogue: Array.isArray(m.catalogue) ? m.catalogue : [],
+    basketChanged: false,
   };
 }
 
@@ -465,6 +473,32 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     }
   }
 
+  /* BASKET TOOLS. Performed BEFORE the model is called, so what it narrates is
+     something that has already happened rather than something it intends. Never
+     fatal: a basket that will not open must produce a sentence, not a 500. */
+  let basketBlock = "";
+  let basketChanged = false;
+  try {
+    const intent = detectBasketIntent(input.message, carried);
+    if (intent.action) {
+      const owner = { customerId: input.customerId ?? null, guestKey: input.guestKey ?? null };
+      const done = await runBasketTool(owner, intent, input.message, carried);
+      if (done) {
+        basketBlock = done.block;
+        basketChanged = done.changed;
+      }
+    }
+  } catch {
+    basketBlock =
+      "\n\n=== BASKET TOOL ===\nThe basket could not be reached just now and NOTHING WAS CHANGED. " +
+      "Say so plainly and suggest they try again in a moment — do not claim anything was added.\n";
+  }
+
+  /* THINGS WE HAVE NOT BUILT. An unbuilt feature gets a sentence, never an
+     error — Ace's rule, and the right one: "something went wrong on our side"
+     reads as a broken shop rather than an honest gap. */
+  const gapsBlock = capabilityBlock(input.message);
+
   /* PERSONA OVERRIDE.
    *
    * This is not belt-and-braces. The stored system prompt (SC 03's
@@ -494,7 +528,11 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     "team — we log it, and it is true. Being honest about a real range is worth more to them than a " +
     "general AI's guesswork.\n" +
     "4. Handing off to a person is for safety and for things only a human can settle — never a way to " +
-    "avoid answering a question about our own products.\n";
+    "avoid answering a question about our own products.\n" +
+    "5. YOU CAN PUT THINGS IN THEIR BASKET. If they ask you to add, remove or show something, it is " +
+    "done before you see this — look for a BASKET TOOL block and report what it says. Never say you " +
+    "are unable to add something to a basket, and never say you have added something unless that " +
+    "block says you did.\n";
 
   const instruction = strict
     ? "Answer ONLY from the grounded chunks above. If they don't cover it, say you don't want to guess and offer a person. "
@@ -524,6 +562,8 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
       ? "(no matching approved knowledge found for this question)"
       : "(nothing in our own knowledge base matches this question — answer from what you know)") +
     catalogueBlock +
+    basketBlock +
+    gapsBlock +
     householdBlock +
     "\n\n=== INSTRUCTION ===\n" +
     instruction +
@@ -613,7 +653,7 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
     }
   }
 
-  return answerFromStored(
+  const answer = answerFromStored(
     stored || {
       role: "jimmy",
       content: display,
@@ -628,4 +668,6 @@ export async function runJimmyChat(input: JimmyChatInput): Promise<JimmyAnswer> 
       catalogue: shopResult ? shopResult.hits : [],
     }
   );
+  answer.basketChanged = basketChanged;
+  return answer;
 }

@@ -164,7 +164,11 @@ const SF_TABS = [
   { href: "/admin/site/sources", label: "Sources" },
 ];
 
-export function SfNav() {
+/* Basket and Account sit apart from the browse tabs — they are where you ARE,
+   not where you are going, and a live count belongs next to the basket rather
+   than buried in a row of nine links. */
+
+export function SfNav({ basketCount = 0 }: { basketCount?: number }) {
   const path = usePathname() || "/admin";
   return (
     <nav className="sf-nav" aria-label="Storefront preview pages">
@@ -186,6 +190,20 @@ export function SfNav() {
           {t.label}
         </Link>
       ))}
+      <span className="sf-navspacer" aria-hidden="true" />
+      <Link
+        href="/admin/site/account"
+        className={`sf-tab${path.startsWith("/admin/site/account") ? " active" : ""}`}
+      >
+        Account
+      </Link>
+      <Link
+        href="/admin/site/basket"
+        className={`sf-tab basket${path.startsWith("/admin/site/basket") ? " active" : ""}`}
+      >
+        Basket
+        {basketCount > 0 ? <span className="sf-basketpip">{basketCount}</span> : null}
+      </Link>
     </nav>
   );
 }

@@ -1,4 +1,5 @@
 import { getJimmyPreviewData } from "@/lib/jimmy/preview-data";
+import { currentCustomer } from "@/lib/customer-auth";
 import JimmyPreview from "./jimmy-preview";
 
 export const dynamic = "force-dynamic";
@@ -31,9 +32,14 @@ export default async function StorefrontJimmyPage() {
     );
   }
 
+  /* A signed-in customer talks to Jimmy about THEIR household, not a test
+     profile picked off a dropdown. Same profile the account area shows —
+     there is one household record, not a shop copy and a Jimmy copy. */
+  const customer = await currentCustomer();
+
   return (
     <div className="sf-embed">
-      <JimmyPreview data={data} />
+      <JimmyPreview data={data} customerProfileId={customer?.profile_id ?? null} />
     </div>
   );
 }
